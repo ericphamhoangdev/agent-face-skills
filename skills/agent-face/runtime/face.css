@@ -1,0 +1,138 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* Every layer shares one grid cell, so mouth frames sit exactly on the face. */
+#stage {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  /* The edge only shows on hover, so the user can see what they're grabbing. */
+  border: 2px solid transparent;
+  border-radius: 4px;
+  cursor: grab;
+  transition: border-color 120ms ease;
+}
+
+#stage:hover {
+  border-color: #3b82f6;
+}
+
+#stage.dragging {
+  cursor: grabbing;
+}
+
+#mouth {
+  display: contents;
+}
+
+#face,
+#mouth img {
+  grid-area: 1 / 1;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.45));
+}
+
+#face.behind-mouth {
+  visibility: hidden;
+}
+
+#error {
+  grid-area: 1 / 1;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(63, 13, 13, 0.92);
+  color: #fecaca;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+button {
+  position: absolute;
+  top: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(20, 20, 20, 0.78);
+  color: #fff;
+  font-size: 13px;
+  line-height: 22px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+#stage:hover button {
+  opacity: 1;
+}
+
+#close {
+  right: 6px;
+  font-size: 15px;
+}
+
+#mute {
+  left: 6px;
+}
+
+#mute.muted {
+  background: rgba(127, 29, 29, 0.92);
+  opacity: 1; /* a muted face says so even when you aren't hovering */
+}
+
+#footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  pointer-events: none;
+}
+
+#label {
+  font-size: 10px;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+#stage:hover #label {
+  opacity: 1;
+}
+
+#caption {
+  max-width: 94%;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: rgba(15, 15, 20, 0.78);
+  color: #f4f4f5;
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: center;
+  overflow-wrap: anywhere;
+}

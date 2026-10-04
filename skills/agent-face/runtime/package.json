@@ -1,0 +1,6 @@
+{
+  "name": "agent-face-window",
+  "private": true,
+  "description": "The floating face window, run by Electron and driven by scripts/face.cjs.",
+  "main": "main.cjs"
+}

@@ -1,0 +1,15 @@
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# A face you create while trying the skills here. Faces belong in the
+# agent's own repo — never in this one.
+/agent-face/
+
+# Skills installed into this checkout while testing the installer.
+/.agents/
+/.claude/
+/skills-lock.json

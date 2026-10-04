@@ -1,0 +1,14 @@
+{
+  "name": "agent-face-skills",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent skills that give a coding agent a floating face on the desktop. No MCP server, no port.",
+  "scripts": {
+    "test": "node --test",
+    "check": "node scripts/check-repo.cjs",
+    "e2e": "node tests/e2e.cjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
