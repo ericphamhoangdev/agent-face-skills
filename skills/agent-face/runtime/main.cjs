@@ -166,7 +166,11 @@ async function playClip(clipName) {
   }
   resolveInside(face.dir, path.join('voice', clip.file));
   if (local.muted) return { result: 'muted' };
+  return startPlayback(`'${clipName}'`, { url: faceUrl(`voice/${clip.file}`) });
+}
 
+/** Have the page play `what` (a clip URL, or `tone: true`); resolves once it has started. */
+async function startPlayback(label, what) {
   const playId = ++playSeq;
   const started = new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -175,9 +179,15 @@ async function playClip(clipName) {
     }, 10000);
     pendingPlays.set(playId, { resolve, reject, timer });
   });
-  send('play', { playId, url: faceUrl(`voice/${clip.file}`), volume: local.volume, lip_sync: face.lip_sync });
-  const { duration_ms, lip_sync } = await started;
-  return { result: 'played', duration_ms, lip_sync, playId };
+  send('play', { playId, ...what, volume: local.volume, lip_sync: face.lip_sync });
+  try {
+    const { duration_ms, lip_sync, audio } = await started;
+    log(`played ${label} (${duration_ms} ms) at volume ${local.volume} on ${audio.device}, output ${audio.state}, latency ${audio.output_latency_ms} ms`);
+    return { result: 'played', duration_ms, lip_sync, volume: local.volume, audio, playId };
+  } catch (e) {
+    log(`could not play ${label}: ${e.message}`);
+    throw e;
+  }
 }
 
 /**
@@ -277,6 +287,11 @@ async function handle(req) {
       const { playId, ...played } = await playClip(req.clip);
       if (playId && shown) clipCaption = { playId, text: shown };
       return { ...played, clip: clip.name, state: local.state, caption: shown };
+    }
+    case 'sound-test': {
+      if (local.muted) return { result: 'muted', volume: local.volume };
+      const { playId, ...played } = await startPlayback('the sound test', { tone: true });
+      return played;
     }
     default:
       throw new Error(`unknown command '${req.cmd}'`);

@@ -105,7 +105,9 @@ try {
 
   step('say plays the clip with lip-sync and clears its caption afterwards', () => {
     const said = face(['say', 'hello']);
-    assert.deepEqual([said.result, said.lip_sync, said.duration_ms, said.caption], ['played', true, 750, 'Hello!']);
+    assert.deepEqual([said.result, said.lip_sync, said.duration_ms, said.caption, said.volume], ['played', true, 750, 'Hello!', 0]);
+    assert.equal(said.audio.state, 'running', 'the reply says the audio output really started');
+    assert.equal(typeof said.audio.device, 'string');
     sleep(1500);
     assert.equal(face(['status']).caption, null);
   });
@@ -171,6 +173,15 @@ try {
     face(['state', 'thinking']);
     assert.equal(face(['use', 'alt']).state, 'happy', 'falls back to the default state');
     assert.equal(face(['use', 'starter']).template, 'starter');
+  });
+
+  step('sound-test plays through the same path and reports the output', () => {
+    const tested = face(['sound-test']);
+    assert.deepEqual([tested.ok, tested.result, tested.duration_ms, tested.audio.state], [true, 'played', 750, 'running']);
+    sleep(1000);
+    const log = fs.readFileSync(paths.logFile(id), 'utf8');
+    assert.match(log, /played 'hello' \(750 ms\) at volume 0 on .+, output running/);
+    assert.match(log, /played the sound test/);
   });
 
   step('mistakes change nothing', () => {

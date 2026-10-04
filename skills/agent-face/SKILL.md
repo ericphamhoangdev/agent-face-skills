@@ -2,7 +2,7 @@
 name: agent-face
 description: Give yourself a floating face on the user's desktop and keep it in step with what you are doing, with no MCP server. Use at the start and end of every turn to set the face's state (working, thinking, happy…) and an optional caption; whenever the user mentions your face, avatar or expression, asks you to show, hide, switch or fix it, or asks to see your face in the chat; to list your face templates and their states and voice clips; and for first-time setup. Your face templates live in your own repo (.agent-face/); this skill ships the window and the face.cjs command that drives it.
 metadata:
-  version: "0.2.0"
+  version: "0.2.1"
 ---
 
 # Agent Face
@@ -32,6 +32,7 @@ Run it from your repo. It finds your face folder, `.agent-face/`, in the current
 | `status` | Is it running, template, state, mute and volume, versions. |
 | `start` / `stop` | Show the face / close it until `start`. |
 | `snapshot <file.png>` | Save a picture of the whole window, caption included. |
+| `sound-test` | Play a short chirp and report which speakers it went to (see `agent-face-voice`). |
 | `setup`, `init`, `check` | First-time setup (below) and checking the face folder. |
 
 ## Every turn

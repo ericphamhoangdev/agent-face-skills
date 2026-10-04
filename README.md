@@ -112,6 +112,7 @@ Because templates live in the agent's repo, **their art and voice are published 
 | `caption ["text"]` | Set or clear the caption. |
 | `say <clip> [--state <name>] [--caption "…"]` | Speak a voice clip. |
 | `current [--png <file.png>]` | The face right now (template, state, caption) and a PNG of it, for the agent to show in the chat. |
+| `sound-test` | Play a short chirp and report which speakers it went to. |
 | `start` / `stop` | Show the face / close it until `start`. |
 | `status` | Running? template, state, mute and volume, versions. |
 | `check [--template <id>]` | Validate every template, or one. |

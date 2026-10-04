@@ -39,6 +39,7 @@ The face uses one template at a time; "use" switches it.
   clips [--template <id>]        list a template's voice clips (default: the one in use)
   say <clip> [--state <name>] [--caption "…"]
                                  speak a clip; the face keeps its state unless --state
+  sound-test                     play a short chirp and report what the audio output did
   check [--template <id>]        validate every template, or one
   snapshot <file.png>            save a picture of the face window
   version                        version of these skills`;
@@ -482,6 +483,8 @@ async function main(argv) {
       });
     case 'snapshot':
       return drive(faceFolder, { cmd: 'snapshot', path: path.resolve(need(args[0], 'a .png path')) });
+    case 'sound-test':
+      return drive(faceFolder, { cmd: 'sound-test' });
     default:
       throw new CliError(`unknown command '${cmd}'`, { hint: 'run: face.cjs help' });
   }

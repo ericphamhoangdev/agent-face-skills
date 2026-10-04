@@ -2,6 +2,13 @@
 
 Install an update with `npx skills update -y`. The face window restarts itself on the new version the next time the agent uses it.
 
+## 0.2.1 — 2026-10-05
+
+- **Fix: clips could play silently.** The face kept one audio connection open for its whole life, and a speaker that slept, reconnected or changed could leave it playing to nowhere, while `say` still said `played` and the mouth moved. Each clip now opens the speakers that are current at that moment, and closes them when it ends.
+- **`say` reports where the sound went:** an `audio` object with the output's state, the device, sample rate and latency, plus the face's `volume`. If the output doesn't start, `say` fails with an error instead of claiming it played.
+- **`sound-test`** plays a short chirp through the same path and reports the same details. The voice skill now has steps for "the user can't hear you".
+- Every clip played (or failed) is written to the face's log.
+
 ## 0.2.0 — 2026-10-05
 
 **The face folder moved, and now holds several templates.** Templates live in `.agent-face/<template>/` in the agent's repo; 0.1 kept a single face in `agent-face/`. To carry a face over, make it a template:

@@ -22,8 +22,7 @@ let mouthReady = Promise.resolve();
 let mouthSettled = () => {};
 /** Object URL of a closed-mouth frame made from an animation, to free later. */
 let madeStill = null;
-let audio = null;
-/** The clip being spoken: { playId, source, timer }. */
+/** The clip being spoken: { playId, context, source, timer }. */
 let talking = null;
 
 function setCaption(text) {
@@ -130,7 +129,7 @@ function setMouth(level) {
 
 function stopTalking() {
   if (!talking) return;
-  const { source, timer } = talking;
+  const { context, source, timer } = talking;
   talking = null;
   clearTimeout(timer);
   source.onended = null;
@@ -139,17 +138,78 @@ function stopTalking() {
   } catch {
     // already finished
   }
+  context.close().catch(() => {});
   setMouth(null);
 }
 
-async function play({ playId, url, volume, lip_sync: tuning }) {
-  stopTalking();
+/**
+ * A new audio context, running on the speakers the system uses right now.
+ * One per clip, closed when it ends: a context kept between clips can end
+ * up on a device that went away (a USB or Bluetooth speaker that slept or
+ * was swapped), where Chromium keeps its clock ticking but nothing is heard.
+ */
+async function openAudio() {
+  const context = new AudioContext();
+  if (context.state !== 'running') {
+    await Promise.race([context.resume(), new Promise((resolve) => setTimeout(resolve, 1000))]);
+  }
+  if (context.state !== 'running') {
+    const state = context.state;
+    context.close().catch(() => {});
+    throw new Error(`the audio output did not start (state: ${state})`);
+  }
+  return context;
+}
+
+/** What the audio output is doing, for the reply and the log. */
+async function describeAudio(context) {
+  let device = null;
   try {
-    audio = audio || new AudioContext();
-    if (audio.state === 'suspended') await audio.resume();
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`clip not found (${response.status})`);
-    const clip = await audio.decodeAudioData(await response.arrayBuffer());
+    const sink = context.sinkId || 'default';
+    const outputs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audiooutput');
+    const match = outputs.find((d) => d.deviceId === sink);
+    device = (match && match.label) || null;
+  } catch {
+    // labels aren't always available
+  }
+  return {
+    state: context.state,
+    device: device || 'system default',
+    sample_rate: context.sampleRate,
+    output_latency_ms: Math.round((context.outputLatency || 0) * 1000),
+  };
+}
+
+/** A short three-note chirp, for the sound test. */
+function chirp(context) {
+  const rate = context.sampleRate;
+  const buffer = context.createBuffer(1, Math.round(rate * 0.75), rate);
+  const data = buffer.getChannelData(0);
+  for (const [start, length, hz] of [[0, 0.16, 520], [0.22, 0.14, 660], [0.42, 0.24, 590]]) {
+    const first = Math.round(start * rate);
+    const count = Math.round(length * rate);
+    for (let i = 0; i < count; i++) {
+      const t = i / rate;
+      const envelope = Math.sin((Math.PI * i) / count);
+      data[first + i] = 0.3 * envelope * (Math.sin(2 * Math.PI * hz * t) + 0.35 * Math.sin(4 * Math.PI * hz * t));
+    }
+  }
+  return buffer;
+}
+
+async function play({ playId, url, tone, volume, lip_sync: tuning }) {
+  stopTalking();
+  let audio = null;
+  try {
+    audio = await openAudio();
+    let clip;
+    if (tone) {
+      clip = chirp(audio);
+    } else {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`clip not found (${response.status})`);
+      clip = await audio.decodeAudioData(await response.arrayBuffer());
+    }
     // A clip often arrives right behind a state change: give that state's
     // mouth frames a moment to finish loading rather than speak without them.
     await Promise.race([mouthReady, new Promise((resolve) => setTimeout(resolve, 2000))]);
@@ -167,16 +227,23 @@ async function play({ playId, url, volume, lip_sync: tuning }) {
     source.connect(gain).connect(audio.destination);
     const startAt = audio.currentTime + 0.05;
     source.start(startAt);
-    talking = { playId, source, timer: undefined };
+    const context = audio;
+    talking = { playId, context, source, timer: undefined };
     source.onended = () => {
       if (talking && talking.playId === playId) {
         clearTimeout(talking.timer);
         talking = null;
         setMouth(null);
       }
+      context.close().catch(() => {});
       host.send('play-ended', { playId });
     };
-    host.send('play-started', { playId, duration_ms: Math.round(clip.duration * 1000), lip_sync: Boolean(plan) });
+    host.send('play-started', {
+      playId,
+      duration_ms: Math.round(clip.duration * 1000),
+      lip_sync: Boolean(plan),
+      audio: await describeAudio(audio),
+    });
 
     if (!plan) return;
     // The audio clock keeps the mouth in step; the output latency is how
@@ -191,6 +258,7 @@ async function play({ playId, url, volume, lip_sync: tuning }) {
     };
     tick();
   } catch (e) {
+    if (audio && !(talking && talking.context === audio)) audio.close().catch(() => {});
     host.send('play-started', { playId, error: e.message || String(e) });
   }
 }
