@@ -1,12 +1,12 @@
-# Face folder format
+# Template format
 
-Everything the window reads from `agent-face/`. Paths are relative to that folder and may not leave it.
+Everything the window reads from one template, `.agent-face/<template>/`. The folder's name is the template's id. Paths are relative to that folder and may not leave it.
 
 ## config.json
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `name` | string | Display name (window title, hover label). Defaults to the name of the folder that contains `agent-face/`. |
+| `name` | string | Display name (window title, hover label). Defaults to the template's id. |
 | `description` | string | Optional note for people and agents. Not shown in the window. |
 | `default_state` | string | State shown the first time the face opens. Falls back to the first state. |
 | `states` | object | Required. State name → state (below). Order is kept. |

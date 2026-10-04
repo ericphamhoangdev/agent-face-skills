@@ -2,6 +2,22 @@
 
 Install an update with `npx skills update -y`. The face window restarts itself on the new version the next time the agent uses it.
 
+## 0.2.0 — 2026-10-05
+
+**The face folder moved, and now holds several templates.** Templates live in `.agent-face/<template>/` in the agent's repo; 0.1 kept a single face in `agent-face/`. To carry a face over, make it a template:
+
+```bash
+mkdir .agent-face
+git mv agent-face .agent-face/<id>     # plain "mv" if the folder isn't tracked
+```
+
+Until that's done, face commands fail with a hint saying exactly this. A window left open by 0.1 is closed automatically when the face next starts. The window's position, mute and volume start fresh.
+
+- **Templates.** `templates` lists them, `use <template>` switches (so does the window's right-click menu), and `init --template <id>` adds a starter one. `states`, `clips` and `check` take `--template <id>`, so an agent can list the states and voice clips of any template.
+- **`current`** returns the face as it is now — template, state, caption — with a PNG of it for the agent to show in the chat.
+- **Resizable by dragging.** Drag any edge or corner; scrolling still works. The window keeps the image's shape.
+- **Really always on top.** The face now stays in front of other always-on-top windows instead of being covered by them.
+
 ## 0.1.0 — 2026-10-05
 
 First version. Three skills that replace the Agent Face MCP app:

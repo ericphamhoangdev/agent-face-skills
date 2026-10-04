@@ -23,6 +23,8 @@ function writeJson(file, value) {
 }
 
 const LOCAL_DEFAULTS = Object.freeze({
+  /** Template the face is using; null until one is first shown or chosen. */
+  template: null,
   /** Current state name; null until the face is first shown. */
   state: null,
   /** Window position and size in screen pixels. */

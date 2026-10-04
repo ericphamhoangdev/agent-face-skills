@@ -18,7 +18,8 @@ const SKILL = path.join(__dirname, '..', 'skills', 'agent-face');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-face-e2e-'));
 const home = process.env.AGENT_FACE_E2E_HOME || path.join(root, 'home');
 const repo = path.join(root, 'repo');
-const faceDir = path.join(repo, 'agent-face');
+const faceFolder = path.join(repo, '.agent-face');
+const starter = path.join(faceFolder, 'starter');
 const env = { ...process.env, AGENT_FACE_HOME: home };
 delete env.AGENT_FACE_DIR;
 
@@ -53,9 +54,13 @@ function step(name, fn) {
 try {
   fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
 
-  step('init creates a face that passes check', () => {
-    assert.equal(face(['init', '--name', 'E2E Face']).ok, true);
-    assert.deepEqual(face(['check']).errors, []);
+  step('init creates templates that pass check', () => {
+    assert.equal(face(['init', '--name', 'E2E Face']).template, 'starter');
+    assert.equal(face(['init', '--template', 'alt', '--name', 'Alt Face']).template, 'alt');
+    assert.equal(face(['check']).ok, true);
+    // The window shows `starter` first, whatever the name order.
+    assert.equal(face(['stop']).face, 'closed');
+    assert.equal(face(['use', 'starter']).face, 'closed');
   });
 
   step('setup installs the window runtime', () => {
@@ -67,22 +72,22 @@ try {
   });
 
   // Silent run: this face plays at volume 0.
-  const id = paths.faceId(faceDir);
+  const id = paths.faceId(faceFolder);
   store.saveLocal(id, { ...store.loadLocal(id), volume: 0 });
   // A clip long enough to photograph: a steady tone from 0.3 s to 2.3 s.
   const rate = 22050;
   const tone = new Int16Array(rate * 2.5);
   for (let i = Math.round(rate * 0.3); i < rate * 2.3; i++) tone[i] = Math.round(12000 * Math.sin((2 * Math.PI * 440 * i) / rate));
-  fs.writeFileSync(path.join(faceDir, 'voice', 'tone.wav'), wav(tone, rate));
-  const index = JSON.parse(fs.readFileSync(path.join(faceDir, 'voice', 'index.json'), 'utf8'));
+  fs.writeFileSync(path.join(starter, 'voice', 'tone.wav'), wav(tone, rate));
+  const index = JSON.parse(fs.readFileSync(path.join(starter, 'voice', 'index.json'), 'utf8'));
   index.clips.tone = { file: 'tone.wav', text: 'A test tone.' };
-  fs.writeFileSync(path.join(faceDir, 'voice', 'index.json'), JSON.stringify(index, null, 2));
+  fs.writeFileSync(path.join(starter, 'voice', 'index.json'), JSON.stringify(index, null, 2));
 
   step('start opens the window', () => {
     const started = face(['start']);
     assert.equal(started.ok, true, JSON.stringify(started));
     assert.equal(started.started, true);
-    assert.equal(started.state, 'happy');
+    assert.deepEqual([started.template, started.state], ['starter', 'happy']);
     assert.equal(face(['start']).started, undefined, 'a second start reuses the window');
   });
 
@@ -128,6 +133,46 @@ try {
     assert.ok(face(['snapshot', after]).ok && fs.readFileSync(after).equals(closed), 'snapshots of a still face are identical');
   });
 
+  step('current describes the face and makes a picture for the chat', () => {
+    face(['state', 'happy', '--caption', 'hello there']);
+    const png = path.join(root, 'current.png');
+    const now = face(['current', '--png', png]);
+    assert.deepEqual(
+      [now.ok, now.template, now.face, now.state, now.caption, now.running],
+      [true, 'starter', 'E2E Face', 'happy', 'hello there', true],
+    );
+    assert.equal(now.image, path.join(starter, 'happy.svg'));
+    assert.deepEqual([now.picture, now.width, now.height], [png, 512, 512]);
+    assert.equal(fs.readFileSync(png).toString('latin1', 1, 4), 'PNG');
+    const byDefault = face(['current']);
+    assert.equal(byDefault.picture, paths.pictureFile(id));
+    assert.ok(fs.readFileSync(byDefault.picture).equals(fs.readFileSync(png)), 'the same face gives the same picture');
+    face(['state', 'sad']);
+    assert.ok(!fs.readFileSync(face(['current']).picture).equals(fs.readFileSync(png)), 'a different state gives a different picture');
+  });
+
+  step('use switches template, keeping the state when the new one has it', () => {
+    const alt = path.join(faceFolder, 'alt');
+    const config = JSON.parse(fs.readFileSync(path.join(alt, 'config.json'), 'utf8'));
+    delete config.states.thinking; // alt has four states; starter has five
+    fs.writeFileSync(path.join(alt, 'config.json'), JSON.stringify(config, null, 2));
+    sleep(700);
+
+    assert.deepEqual(face(['templates']).templates.map((t) => [t.template, t.states]), [['alt', 4], ['starter', 5]]);
+    assert.deepEqual(face(['states', '--template', 'alt']).states, ['happy', 'working', 'laugh', 'sad']);
+    face(['state', 'sad']);
+    assert.deepEqual(face(['use', 'alt']), { ok: true, template: 'alt', state: 'sad', caption: null });
+    assert.deepEqual([face(['status']).template, face(['status']).face], ['alt', 'Alt Face']);
+    assert.equal(face(['current']).image, path.join(alt, 'sad.svg'));
+    assert.match(face(['state', 'thinking']).error, /state 'thinking' is not in this face/);
+    assert.match(face(['use', 'nope']).error, /no template 'nope' \(have: alt, starter\)/);
+
+    face(['use', 'starter']);
+    face(['state', 'thinking']);
+    assert.equal(face(['use', 'alt']).state, 'happy', 'falls back to the default state');
+    assert.equal(face(['use', 'starter']).template, 'starter');
+  });
+
   step('mistakes change nothing', () => {
     const before = face(['status']).state;
     assert.match(face(['say', 'nope']).error, /no voice clip 'nope' \(have: hello, tone\)/);
@@ -136,7 +181,7 @@ try {
   });
 
   step('edits to the folder show up without a command', () => {
-    const file = path.join(faceDir, 'config.json');
+    const file = path.join(starter, 'config.json');
     const config = JSON.parse(fs.readFileSync(file, 'utf8'));
     fs.writeFileSync(file, JSON.stringify({ ...config, name: 'Renamed' }, null, 2));
     sleep(1500);

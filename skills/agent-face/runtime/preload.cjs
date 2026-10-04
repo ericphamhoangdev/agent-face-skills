@@ -4,7 +4,7 @@
 
 const { contextBridge, ipcRenderer } = require('electron');
 
-const FROM_WINDOW = new Set(['view', 'caption', 'muted', 'play', 'stop-audio']);
+const FROM_WINDOW = new Set(['view', 'caption', 'muted', 'play', 'stop-audio', 'picture']);
 const TO_WINDOW = new Set([
   'image-size',
   'resize-by',
@@ -14,8 +14,12 @@ const TO_WINDOW = new Set([
   'drag-start',
   'drag-move',
   'drag-end',
+  'resize-start',
+  'resize-move',
+  'resize-end',
   'play-started',
   'play-ended',
+  'picture-result',
 ]);
 
 contextBridge.exposeInMainWorld('faceHost', {

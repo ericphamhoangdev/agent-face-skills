@@ -21,6 +21,15 @@ module.exports = `<!doctype html>
       <div id="error" hidden></div>
       <button id="mute" type="button" title="Mute voice"></button>
       <button id="close" type="button" title="Close face">×</button>
+      <!-- Edges and corners to drag: a transparent window has no resize border of its own. -->
+      <div class="resize" data-edge="n"></div>
+      <div class="resize" data-edge="s"></div>
+      <div class="resize" data-edge="e"></div>
+      <div class="resize" data-edge="w"></div>
+      <div class="resize" data-edge="ne"></div>
+      <div class="resize" data-edge="nw"></div>
+      <div class="resize" data-edge="se"></div>
+      <div class="resize" data-edge="sw"></div>
       <div id="footer">
         <div id="label"></div>
         <div id="caption" hidden></div>

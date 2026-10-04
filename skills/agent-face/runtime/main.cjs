@@ -1,7 +1,8 @@
 'use strict';
 // The face window: one small transparent, always-on-top window per face
-// folder. It reads the face from that folder, and takes commands from
-// scripts/face.cjs over a local pipe — there is no server and no TCP port.
+// folder (`.agent-face/` in an agent's repo). It shows one of the folder's
+// templates at a time, and takes commands from scripts/face.cjs over a
+// local pipe — there is no server and no TCP port.
 
 const { app, BrowserWindow, Menu, ipcMain, protocol, screen, shell } = require('electron');
 const fs = require('fs');
@@ -10,24 +11,29 @@ const path = require('path');
 
 const paths = require('../lib/paths.cjs');
 const store = require('../lib/store.cjs');
-const { loadFace, resolveInside } = require('../lib/config.cjs');
+const { loadTemplate, listTemplates, pickTemplate, resolveInside } = require('../lib/config.cjs');
 const { mimeFor } = require('../lib/media.cjs');
 
 const ORIGIN = 'agent-face://local';
 const PAGE = require('./page.cjs');
 const APP_FILES = new Set(['face.css', 'face.js', 'lipsync.js']);
 const MAX_CAPTION = 60;
+/** Longest side, in pixels, of the picture `current` makes for the chat. */
+const PICTURE_SIZE = 512;
 const DEFAULT_WIDTH = 220;
 const MIN_WIDTH = 80;
 const MAX_WIDTH = 1600;
+// The highest level. Lower ones are deliberately kept behind the taskbar on
+// Windows (and the Dock on macOS), where other topmost windows cover them.
+const TOP_LEVEL = 'screen-saver';
 
 const faceArg = process.argv.indexOf('--face');
-const faceDir = faceArg > 0 && process.argv[faceArg + 1] ? path.resolve(process.argv[faceArg + 1]) : null;
-if (!faceDir) {
+const faceFolder = faceArg > 0 && process.argv[faceArg + 1] ? path.resolve(process.argv[faceArg + 1]) : null;
+if (!faceFolder) {
   console.error('usage: electron <runtime folder> --face <face folder>');
   app.exit(2);
 }
-const id = paths.faceId(faceDir || '.');
+const id = paths.faceId(faceFolder || '.');
 const endpoint = paths.endpoint(id);
 
 // Each face gets its own browser profile, so several faces can run at once.
@@ -39,7 +45,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 let win = null;
-/** The loaded face, or null while the folder can't be read (see faceError). */
+/** The template in use, or null while it can't be read (see faceError). */
 let face = null;
 let faceError = null;
 let local = store.loadLocal(id);
@@ -49,11 +55,17 @@ let rev = 0;
 /** True when we close the window ourselves rather than the user. */
 let quitting = false;
 let drag = null;
+let resize = null;
+/** True while the right-click menu is showing. */
+let menuOpen = false;
 let playSeq = 0;
 /** Clips waiting for the page to say they started. */
 const pendingPlays = new Map();
 /** The caption a playing clip put up, cleared when that clip ends. */
 let clipCaption = null;
+let pictureSeq = 0;
+/** Pictures waiting for the page to draw them. */
+const pendingPictures = new Map();
 
 const log = (...args) => console.log(new Date().toISOString(), ...args);
 const persist = () => store.saveLocal(id, local);
@@ -63,8 +75,12 @@ const send = (channel, data) => {
 
 function reload() {
   try {
-    face = loadFace(faceDir);
+    // The chosen template, or the first one when nothing was chosen yet
+    // (or the chosen one is gone).
+    const template = pickTemplate(faceFolder, null, local.template);
+    face = loadTemplate(path.join(faceFolder, template));
     faceError = null;
+    local.template = template;
     if (!face.states.some((s) => s.name === local.state)) local.state = face.default_state;
   } catch (e) {
     face = null;
@@ -120,6 +136,16 @@ function setState(name, { sound = true } = {}) {
   }
 }
 
+/** Switch the face to another template, keeping the state if it has one by that name. */
+function useTemplate(template) {
+  local.template = template;
+  reload();
+  persist();
+  caption = null;
+  clipCaption = null;
+  redraw();
+}
+
 function setMuted(muted) {
   local.muted = muted;
   persist();
@@ -135,10 +161,10 @@ async function playClip(clipName) {
     throw new Error(
       have.length
         ? `no voice clip '${clipName}' (have: ${have.join(', ')})`
-        : 'this face has no voice clips (add voice/index.json)',
+        : `template '${face.id}' has no voice clips (add voice/index.json)`,
     );
   }
-  resolveInside(faceDir, path.join('voice', clip.file));
+  resolveInside(face.dir, path.join('voice', clip.file));
   if (local.muted) return { result: 'muted' };
 
   const playId = ++playSeq;
@@ -154,13 +180,34 @@ async function playClip(clipName) {
   return { result: 'played', duration_ms, lip_sync, playId };
 }
 
+/**
+ * The face as it looks right now, without the window around it: just the
+ * image (the mouth frame, mid-speech), as PNG bytes.
+ */
+function picture() {
+  const pictureId = ++pictureSeq;
+  const drawn = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pendingPictures.delete(pictureId);
+      reject(new Error('the face window did not draw the picture'));
+    }, 8000);
+    pendingPictures.set(pictureId, { resolve, reject, timer });
+  });
+  send('picture', { pictureId, max: PICTURE_SIZE });
+  return drawn;
+}
+
 function status() {
+  const state = face && face.states.find((s) => s.name === local.state);
   return {
     version: paths.VERSION,
     pid: process.pid,
-    face_dir: faceDir,
+    face_folder: faceFolder,
+    template: face ? face.id : local.template,
     face: face ? face.name : null,
     state: face ? local.state : null,
+    /** The current state's own image file, in the agent's repo. */
+    image: state ? path.join(face.dir, state.file) : null,
     caption,
     muted: local.muted,
     volume: local.volume,
@@ -185,6 +232,21 @@ async function handle(req) {
     fs.mkdirSync(path.dirname(req.path), { recursive: true });
     fs.writeFileSync(req.path, image.toPNG());
     return { path: req.path, ...image.getSize() };
+  }
+
+  if (req.cmd === 'current') {
+    const now = status();
+    if (!face) return { ...now, picture: null };
+    const drawn = await picture();
+    fs.mkdirSync(path.dirname(req.path), { recursive: true });
+    fs.writeFileSync(req.path, Buffer.from(drawn.data));
+    return { ...now, picture: req.path, width: drawn.width, height: drawn.height };
+  }
+  if (req.cmd === 'use') {
+    // Before the check below: switching is how you get away from a broken template.
+    useTemplate(pickTemplate(faceFolder, req.template));
+    if (!face) throw new Error(faceError);
+    return { template: face.id, state: local.state, caption };
   }
 
   reload(); // the face folder is read fresh for every command
@@ -281,9 +343,9 @@ function serveFile(request) {
   let file = null;
   try {
     if (rel.startsWith('/app/') && APP_FILES.has(rel.slice(5))) file = path.join(__dirname, rel.slice(5));
-    else if (rel.startsWith('/face/')) file = resolveInside(faceDir, rel.slice(6));
+    else if (rel.startsWith('/face/') && face) file = resolveInside(face.dir, rel.slice(6));
   } catch {
-    file = null; // missing, or outside the face folder
+    file = null; // missing, or outside the template folder
   }
   if (!file) return new Response('not found', { status: 404 });
   return new Response(fs.readFileSync(file), {
@@ -319,11 +381,46 @@ function fitTo(imageWidth, imageHeight) {
   if (Math.abs(height - b.height) > 1) win.setBounds({ ...b, height });
 }
 
+const clampWidth = (width) => Math.round(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, width)));
+
 function resizeBy(factor) {
   if (!win || win.isDestroyed() || !(factor > 0)) return;
   const b = win.getBounds();
-  const width = Math.round(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, b.width * factor)));
+  const width = clampWidth(b.width * factor);
   win.setBounds({ ...b, width, height: Math.max(1, Math.round((b.height * width) / b.width)) });
+}
+
+/**
+ * Follow the cursor while an edge or corner is dragged. The window keeps
+ * its shape, and the side opposite the one being dragged stays put.
+ */
+function resizeToCursor() {
+  if (!resize || !win || win.isDestroyed()) return;
+  const { edge, cursor, bounds } = resize;
+  const now = screen.getCursorScreenPoint();
+  const aspect = bounds.width / bounds.height;
+  // The width change each direction of movement asks for; a corner takes the larger.
+  const across = edge.includes('e') ? now.x - cursor.x : edge.includes('w') ? cursor.x - now.x : null;
+  const along = edge.includes('s') ? (now.y - cursor.y) * aspect : edge.includes('n') ? (cursor.y - now.y) * aspect : null;
+  const change = across === null ? along : along === null || Math.abs(across) >= Math.abs(along) ? across : along;
+  const width = clampWidth(bounds.width + change);
+  const height = Math.max(1, Math.round(width / aspect));
+  win.setBounds({
+    x: edge.includes('w') ? bounds.x + bounds.width - width : bounds.x,
+    y: edge.includes('n') ? bounds.y + bounds.height - height : bounds.y,
+    width,
+    height,
+  });
+}
+
+/**
+ * Always on top means on top of other always-on-top windows too. Windows
+ * puts whichever was raised last in front, so put the face back regularly.
+ */
+function keepOnTop() {
+  if (!win || win.isDestroyed() || menuOpen || drag || resize) return;
+  if (!win.isAlwaysOnTop()) win.setAlwaysOnTop(true, TOP_LEVEL);
+  win.moveTop();
 }
 
 function quit() {
@@ -347,15 +444,24 @@ function popupMenu() {
       persist();
     },
   });
+  menuOpen = true; // so keepOnTop doesn't lift the face over its own menu
+  const templates = listTemplates(faceFolder);
+  const template = (t) => ({ label: t, type: 'radio', checked: t === local.template, click: () => useTemplate(t) });
   Menu.buildFromTemplate([
     { label: face ? `${face.name} · ${local.state}` : 'Agent Face', enabled: false },
     { type: 'separator' },
+    ...(templates.length > 1 ? [{ label: 'Template', submenu: templates.map(template) }, { type: 'separator' }] : []),
     { label: 'Mute voice', type: 'checkbox', checked: local.muted, click: () => setMuted(!local.muted) },
     { label: 'Volume', submenu: [0.25, 0.5, 0.7, 1].map(volume) },
     { type: 'separator' },
-    { label: 'Open face folder', click: () => shell.openPath(faceDir) },
+    { label: 'Open face folder', click: () => shell.openPath(face ? face.dir : faceFolder) },
     { label: 'Close face', click: closeByUser },
-  ]).popup({ window: win });
+  ]).popup({
+    window: win,
+    callback: () => {
+      menuOpen = false;
+    },
+  });
 }
 
 function createWindow() {
@@ -366,8 +472,8 @@ function createWindow() {
     transparent: true,
     backgroundColor: '#00000000',
     hasShadow: false,
-    // Transparent windows can't use the system resize border; the page
-    // sends wheel and drag gestures instead.
+    // Transparent windows can't use the system resize border; the page has
+    // its own edge and corner handles, and resizes on scroll.
     resizable: false,
     maximizable: false,
     minimizable: false,
@@ -384,7 +490,8 @@ function createWindow() {
       backgroundThrottling: false,
     },
   });
-  win.setAlwaysOnTop(true, 'floating');
+  win.setAlwaysOnTop(true, TOP_LEVEL);
+  setInterval(keepOnTop, 2000);
   win.once('ready-to-show', () => win.showInactive()); // never steal focus from the user's work
   win.on('move', saveBoundsSoon);
   win.on('resize', saveBoundsSoon);
@@ -421,12 +528,28 @@ ipcMain.on('drag-move', () => {
 ipcMain.on('drag-end', () => {
   drag = null;
 });
+ipcMain.on('resize-start', (_event, edge) => {
+  if (!win || win.isDestroyed() || !/^(n|s|e|w|ne|nw|se|sw)$/.test(edge)) return;
+  resize = { edge, cursor: screen.getCursorScreenPoint(), bounds: win.getBounds() };
+});
+ipcMain.on('resize-move', resizeToCursor);
+ipcMain.on('resize-end', () => {
+  resize = null;
+});
 ipcMain.on('play-started', (_event, message) => {
   const pending = pendingPlays.get(message.playId);
   if (!pending) return;
   pendingPlays.delete(message.playId);
   clearTimeout(pending.timer);
   if (message.error) pending.reject(new Error(`could not play the clip: ${message.error}`));
+  else pending.resolve(message);
+});
+ipcMain.on('picture-result', (_event, message) => {
+  const pending = pendingPictures.get(message.pictureId);
+  if (!pending) return;
+  pendingPictures.delete(message.pictureId);
+  clearTimeout(pending.timer);
+  if (message.error) pending.reject(new Error(`could not draw the face: ${message.error}`));
   else pending.resolve(message);
 });
 ipcMain.on('play-ended', (_event, { playId }) => {
@@ -439,7 +562,7 @@ app.on('will-quit', () => {
 });
 
 app.whenReady().then(async () => {
-  if (!faceDir) return;
+  if (!faceFolder) return;
   if (!(await listen())) {
     log('another window already shows this face; exiting');
     quitting = true;
@@ -452,7 +575,7 @@ app.whenReady().then(async () => {
   persist();
   createWindow();
   watchFace();
-  log(`face window ${paths.VERSION} for ${faceDir}`);
+  log(`face window ${paths.VERSION} for ${faceFolder}`);
 });
 
 /**
@@ -466,7 +589,7 @@ function watchFace(retrying = false) {
   };
   let timer = null;
   try {
-    const watcher = fs.watch(faceDir, { recursive: true }, () => {
+    const watcher = fs.watch(faceFolder, { recursive: true }, () => {
       clearTimeout(timer);
       timer = setTimeout(() => {
         reload();

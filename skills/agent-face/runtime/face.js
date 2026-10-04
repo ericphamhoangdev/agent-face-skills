@@ -199,6 +199,26 @@ host.on('view', show);
 host.on('caption', setCaption);
 host.on('muted', setMuted);
 host.on('play', play);
+host.on('picture', async ({ pictureId, max }) => {
+  try {
+    // Whatever is on screen: the open or closed mouth mid-speech, else the state's image.
+    const shown = (talking && mouth && mouth.find((frame) => !frame.hidden)) || faceImg;
+    const longest = Math.max(shown.naturalWidth, shown.naturalHeight);
+    if (!longest) throw new Error('no image is showing');
+    // Shrink big art to fit; only vector art is worth enlarging.
+    const vector = /\.svg(\?|$)/i.test(shown.currentSrc || shown.src);
+    const scale = vector ? max / longest : Math.min(1, max / longest);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(shown.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(shown.naturalHeight * scale));
+    canvas.getContext('2d').drawImage(shown, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    const data = new Uint8Array(await blob.arrayBuffer());
+    host.send('picture-result', { pictureId, width: canvas.width, height: canvas.height, data });
+  } catch (e) {
+    host.send('picture-result', { pictureId, error: e.message || String(e) });
+  }
+});
 host.on('stop-audio', () => {
   const playId = talking && talking.playId;
   stopTalking();
@@ -231,7 +251,33 @@ const endDrag = () => {
 stage.addEventListener('pointerup', endDrag);
 stage.addEventListener('pointercancel', endDrag);
 
-// Scroll over the face to resize it; right-click for the menu.
+// Drag an edge or corner to resize. The window process follows the cursor.
+let resizing = false;
+for (const handle of document.querySelectorAll('.resize')) {
+  handle.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    event.stopPropagation(); // a resize, not a move
+    resizing = true;
+    handle.setPointerCapture(event.pointerId);
+    host.send('resize-start', handle.dataset.edge);
+  });
+  handle.addEventListener('pointermove', () => {
+    if (!resizing || frameRequest) return;
+    frameRequest = requestAnimationFrame(() => {
+      frameRequest = 0;
+      if (resizing) host.send('resize-move');
+    });
+  });
+  const endResize = () => {
+    if (!resizing) return;
+    resizing = false;
+    host.send('resize-end');
+  };
+  handle.addEventListener('pointerup', endResize);
+  handle.addEventListener('pointercancel', endResize);
+}
+
+// Scrolling over the face resizes it too; right-click for the menu.
 stage.addEventListener('wheel', (event) => host.send('resize-by', event.deltaY < 0 ? 1.1 : 1 / 1.1), { passive: true });
 stage.addEventListener('contextmenu', (event) => {
   event.preventDefault();

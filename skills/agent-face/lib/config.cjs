@@ -1,7 +1,8 @@
 'use strict';
-// Reads a face folder: config.json (states, lip-sync tuning) and the
-// optional voice/index.json (clips). Read fresh on every use, so edits to
-// the folder take effect without restarting anything.
+// Reads the face folder (`.agent-face/` in the agent's repo). Each
+// sub-folder with a config.json is a face template: its states, lip-sync
+// tuning and optional voice/index.json (clips). Read fresh on every use, so
+// edits take effect without restarting anything.
 
 const fs = require('fs');
 const path = require('path');
@@ -9,19 +10,50 @@ const path = require('path');
 const lipSync = require('../runtime/lipsync.js');
 
 /**
- * Absolute path of an existing file inside the face folder. Refuses paths
- * that escape it (`..`, absolute paths, links), so a face can never make
- * the window read files from elsewhere on the machine.
+ * Absolute path of an existing file inside a template folder. Refuses paths
+ * that escape it (`..`, absolute paths, links), so a template can never
+ * make the window read files from elsewhere on the machine.
  */
-function resolveInside(faceDir, rel) {
-  const target = path.resolve(faceDir, rel);
+function resolveInside(templateDir, rel) {
+  const target = path.resolve(templateDir, rel);
   if (!fs.existsSync(target)) throw new Error(`file does not exist: ${rel}`);
-  const root = fs.realpathSync(faceDir);
+  const root = fs.realpathSync(templateDir);
   const real = fs.realpathSync(target);
   if (real !== root && !real.startsWith(root + path.sep)) {
-    throw new Error(`${rel} is outside the face folder`);
+    throw new Error(`${rel} is outside the template folder`);
   }
   return real;
+}
+
+/** Ids (folder names) of the templates in the face folder, in name order. */
+function listTemplates(faceFolder) {
+  let entries;
+  try {
+    entries = fs.readdirSync(faceFolder, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((e) => e.isDirectory() && fs.existsSync(path.join(faceFolder, e.name, 'config.json')))
+    .map((e) => e.name)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * The template to use: `wanted` if given, else `remembered` if it still
+ * exists, else the first one. Throws when `wanted` isn't a template or the
+ * folder has none.
+ */
+function pickTemplate(faceFolder, wanted, remembered) {
+  const have = listTemplates(faceFolder);
+  if (!have.length) {
+    throw new Error(`no face templates found in ${faceFolder} (run "init" to create a starter face)`);
+  }
+  if (wanted) {
+    if (!have.includes(wanted)) throw new Error(`no template '${wanted}' (have: ${have.join(', ')})`);
+    return wanted;
+  }
+  return have.includes(remembered) ? remembered : have[0];
 }
 
 const optionalString = (v) => (typeof v === 'string' && v ? v : null);
@@ -32,8 +64,8 @@ function oneOrMany(v) {
   return (Array.isArray(v) ? v : [v]).filter((f) => typeof f === 'string' && f);
 }
 
-function loadVoice(faceDir) {
-  const index = path.join(faceDir, 'voice', 'index.json');
+function loadVoice(templateDir) {
+  const index = path.join(templateDir, 'voice', 'index.json');
   if (!fs.existsSync(index)) return { clips: [], error: null };
   try {
     const parsed = JSON.parse(fs.readFileSync(index, 'utf8'));
@@ -44,34 +76,35 @@ function loadVoice(faceDir) {
       .map(([name, c]) => ({ name, file: c.file, text: optionalString(c.text) }));
     return { clips, error: null };
   } catch (e) {
-    // A broken index must not take the face down with it.
+    // A broken index must not take the template down with it.
     return { clips: [], error: `voice/index.json: ${e.message}` };
   }
 }
 
-/** The face in `faceDir`. Throws with a message a person can act on. */
-function loadFace(faceDir) {
-  const file = path.join(faceDir, 'config.json');
+/** The template in `templateDir`. Throws with a message a person can act on. */
+function loadTemplate(templateDir) {
+  const file = path.join(templateDir, 'config.json');
+  const id = path.basename(path.resolve(templateDir));
   let raw;
   try {
     raw = fs.readFileSync(file, 'utf8');
   } catch {
-    throw new Error(`no face found: ${file} does not exist (run "init" to create a starter face)`);
+    throw new Error(`template '${id}' has no config.json`);
   }
   let cfg;
   try {
     cfg = JSON.parse(raw);
   } catch (e) {
-    throw new Error(`config.json is not valid JSON: ${e.message}`);
+    throw new Error(`template '${id}': config.json is not valid JSON: ${e.message}`);
   }
   const entries = cfg && cfg.states && typeof cfg.states === 'object' ? Object.entries(cfg.states) : [];
-  if (!entries.length) throw new Error('config.json has no states');
+  if (!entries.length) throw new Error(`template '${id}': config.json has no states`);
 
   // Kept in file order: it's the order agents see, and the first state is
   // the fallback default.
   const states = entries.map(([name, s]) => {
     if (!s || typeof s.file !== 'string' || !s.file) {
-      throw new Error(`state '${name}' has no "file"`);
+      throw new Error(`template '${id}': state '${name}' has no "file"`);
     }
     return {
       name,
@@ -86,13 +119,12 @@ function loadFace(faceDir) {
   });
 
   const wanted = optionalString(cfg.default_state);
-  const voice = loadVoice(faceDir);
-  // Unnamed faces take the repo's name: `my-agent/agent-face` is "my-agent".
-  const folder = path.basename(path.resolve(faceDir));
-  const fallbackName = folder === 'agent-face' ? path.basename(path.dirname(path.resolve(faceDir))) : folder;
+  const voice = loadVoice(templateDir);
   return {
-    dir: faceDir,
-    name: optionalString(cfg.name) || fallbackName,
+    /** The template's folder name: what commands call it. */
+    id,
+    dir: templateDir,
+    name: optionalString(cfg.name) || id,
     description: optionalString(cfg.description),
     default_state: states.some((s) => s.name === wanted) ? wanted : states[0].name,
     states,
@@ -102,4 +134,4 @@ function loadFace(faceDir) {
   };
 }
 
-module.exports = { loadFace, resolveInside };
+module.exports = { loadTemplate, listTemplates, pickTemplate, resolveInside };

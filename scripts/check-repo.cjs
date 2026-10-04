@@ -13,7 +13,7 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 const SKIP_ANYWHERE = new Set(['.git', 'node_modules']);
 /** Git-ignored folders left at the top level by trying the skills here. */
-const SKIP_AT_ROOT = new Set(['.agents', '.claude', 'agent-face']);
+const SKIP_AT_ROOT = new Set(['.agents', '.claude', '.agent-face']);
 const MEDIA = new Set([
   '.png', '.apng', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico', '.bmp', '.avif', '.tiff',
   '.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac', '.opus',
@@ -24,6 +24,8 @@ const PERSONAL = [
   [/(?<![\w.])\/(?:Users|home)\/(?!example\b|you\b|me\b|name\b|<)[A-Za-z0-9._-]+\//, 'a home-folder path'],
   [/[A-Za-z0-9._%+-]+@(?!example\.(?:com|org)\b)[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/, 'an email address'],
 ];
+/** SSH remotes such as `git@host:owner/repo.git` are addresses of repos, not of people. */
+const SSH_REMOTE = /\bgit@[A-Za-z0-9.-]+:/g;
 
 function* walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -62,7 +64,8 @@ function checkRepo() {
       problems.push(`${rel(file)}: binary files don't belong in this repo`);
       continue;
     }
-    text.split('\n').forEach((line, i) => {
+    text.split('\n').forEach((raw, i) => {
+      const line = raw.replace(SSH_REMOTE, '');
       for (const [pattern, what] of PERSONAL) {
         if (pattern.test(line)) problems.push(`${rel(file)}:${i + 1}: looks like ${what}`);
       }

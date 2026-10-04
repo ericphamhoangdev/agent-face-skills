@@ -2,12 +2,12 @@
 name: agent-face-voice
 description: Speak through your face by playing one of its voice clips out loud, with the mouth moving in time. Use when the user asks you to say something aloud, to greet them, or to announce that long work has finished; when they ask about your voice, muting or volume; and when a state should make a sound. Needs the agent-face skill installed next to it.
 metadata:
-  version: "0.1.0"
+  version: "0.2.0"
 ---
 
 # Agent Face — voice
 
-Your face can speak: it plays a recorded clip through the user's speakers, shows the clip's text under the face, and moves the mouth with the sound.
+Your face can speak: it plays one of its template's recorded clips through the user's speakers, shows the clip's text under the face, and moves the mouth with the sound.
 
 The command lives in the `agent-face` skill, installed next to this one:
 
@@ -18,7 +18,8 @@ node "<this skill's folder>/../agent-face/scripts/face.cjs" <command>
 ## Speaking
 
 ```bash
-face.cjs clips                                  # which clips this face has, with their text
+face.cjs clips                                  # the clips of the template in use, with their text
+face.cjs clips --template <id>                  # the clips of another of your templates
 face.cjs say <clip>                             # speak; the face keeps its current state
 face.cjs say <clip> --state proud               # switch expression first, then speak
 face.cjs say <clip> --caption "Build is green"  # show this instead of the clip's own text
@@ -47,8 +48,8 @@ The mouth moves only if the face's current state has mouth frames (`talk` in `co
 
 ## Sounds on a state
 
-A state can play a clip every time the face switches into it: add `"sound": "<clip name>"` to that state in `agent-face/config.json`. Use this for one or two rare, meaningful states (a chime when work is done). On a common state it would make the face speak constantly, because you change state at least twice a turn.
+A state can play a clip every time the face switches into it: add `"sound": "<clip name>"` to that state in the template's `config.json`. Use this for one or two rare, meaningful states (a chime when work is done). On a common state it would make the face speak constantly, because you change state at least twice a turn.
 
 ## Adding clips
 
-Clips are audio files in `agent-face/voice/`, listed in `agent-face/voice/index.json`. The format, and how to check your work, are in the `agent-face-template` skill.
+Each template has its own clips: audio files in `.agent-face/<template>/voice/`, listed in that folder's `index.json`. `say` plays clips of the template in use. The format, and how to check your work, are in the `agent-face-template` skill.
