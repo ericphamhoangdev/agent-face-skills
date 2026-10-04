@@ -19,7 +19,7 @@ Skills fix the shape rather than the symptoms: the agent installs the capability
 skills/agent-face/
   SKILL.md          when and how to drive the face
   scripts/face.cjs  the command agents run
-  lib/              shared: face folder loader, image headers, quiet hours, storage, pipe client
+  lib/              shared: face folder loader, image headers, storage, pipe client
   runtime/          the window: Electron main process, preload, page, lip-sync maths
 skills/agent-face-voice/SKILL.md      speaking, and sound manners
 skills/agent-face-template/SKILL.md   authoring the face folder
@@ -31,7 +31,7 @@ skills/agent-face-template/SKILL.md   authoring the face folder
 
 **The face folder** (`agent-face/` in the agent's repo) is the single source of truth and is re-read on every command; a file watcher redraws the window when it changes.
 
-**Per-user data** (`~/.agent-face/`) holds what isn't the agent's to decide or commit: window position, mute and volume per face, quiet hours, the Electron install, logs.
+**Per-user data** (`~/.agent-face/`) holds what isn't the agent's to decide or commit: window position, mute and volume per face, the Electron install, logs.
 
 ## Decisions
 
@@ -62,9 +62,7 @@ The trade-off is privacy: a face committed to a public repo is public. The templ
 
 ### Sound belongs to the user
 
-Mute and volume are per face, quiet hours are global, and all three live in `~/.agent-face/`, changed from the window's right-click menu. The CLI has no command to change them. An agent with file access could still edit those files, so this is a boundary of instructions and design rather than of enforcement; the voice skill is explicit that it must not.
-
-Quiet hours default to on (20:00–08:00) because an unexpected voice at night is worse than a missed one.
+Mute and volume are per face and live in `~/.agent-face/`, changed from the window's right-click menu and its speaker button. The CLI has no command to change them. An agent with file access could still edit that file, so this is a boundary of instructions and design rather than of enforcement; the voice skill is explicit that it must not.
 
 ### A closed face stays closed
 
@@ -81,6 +79,5 @@ Before a clip plays, the page decodes it and measures loudness in 40 ms steps. E
 ## What isn't here yet
 
 - macOS and Linux are untested.
-- Quiet hours are edited as a JSON file; there's no time picker.
 - One process per face (see above).
 - No signed releases or pinned Electron build: `setup` installs the newest patch of the pinned major version from npm.

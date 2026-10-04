@@ -41,6 +41,6 @@ Faces no longer have names to address them by: the face is the one in the repo t
 ## What changes for the user
 
 - **No control panel.** Create a face with `face.cjs init` or by adding files; hide and show it with the × button and `face.cjs start`; everything else is the right-click menu.
-- **Sound settings start fresh.** Mute and volume are per face and default to unmuted at 70%. Quiet hours default to on, 20:00–08:00, whatever the app's setting was. Change them from the right-click menu.
+- **Sound settings start fresh.** Mute and volume are per face and default to unmuted at 70%. Change them from the right-click menu. There are no quiet hours: mute a face when you want it silent.
 - **Window position starts fresh.** Drag the face where you want it once.
 - **No port.** Nothing listens on the network.

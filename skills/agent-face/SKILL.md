@@ -25,7 +25,7 @@ Run it from your repo. It finds the face in `agent-face/` in the current folder 
 | `state <name> [--caption "…"]` | Switch to a specific state. |
 | `states` | List the states this face has. |
 | `caption ["text"]` | Show a short line under the face. No text clears it. |
-| `status` | Is it running, current state, sound settings, versions. |
+| `status` | Is it running, current state, mute and volume, versions. |
 | `start` / `stop` | Show the face / close it until `start`. |
 | `snapshot <file.png>` | Save a picture of the window as the user sees it. |
 | `setup`, `init`, `check` | First-time setup (below) and checking the face folder. |
@@ -59,7 +59,7 @@ If a command returns `"face": "closed"`, the user closed the window on purpose (
 ## Where things live
 
 - **`agent-face/` in your repo** holds the face: `config.json`, the state images, mouth frames, voice clips. It's yours to edit (see `agent-face-template`). To see what a state looks like, read its image file directly.
-- **`~/.agent-face/` on the user's machine** holds what belongs to the user: where the window sits, mute and volume, quiet hours, the window runtime and logs. Read it through `status`; don't edit it. In particular, never change sound settings to get around a mute or quiet hours.
+- **`~/.agent-face/` on the user's machine** holds what belongs to the user: where the window sits, mute and volume, the window runtime and logs. Read it through `status`; don't edit it. In particular, never unmute the face or change its volume yourself.
 
 ## Updating
 

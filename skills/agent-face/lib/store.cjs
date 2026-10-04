@@ -1,13 +1,11 @@
 'use strict';
-// Small JSON files in the per-user data folder: one per face (where its
-// window sits, mute, volume, whether it was closed) and one for sound
-// settings shared by every face.
+// One small JSON file per face in the per-user data folder: where its
+// window sits, mute, volume, and whether it was closed.
 
 const fs = require('fs');
 const path = require('path');
 
 const paths = require('./paths.cjs');
-const quiet = require('./quiet.cjs');
 
 function readJson(file, fallback) {
   try {
@@ -44,13 +42,4 @@ function saveLocal(id, local) {
   writeJson(paths.localFile(id), local);
 }
 
-function loadSettings() {
-  const saved = readJson(paths.settingsFile(), {});
-  return { quiet_hours: { ...quiet.DEFAULTS, ...(saved.quiet_hours || {}) } };
-}
-
-function saveSettings(settings) {
-  writeJson(paths.settingsFile(), settings);
-}
-
-module.exports = { readJson, writeJson, loadLocal, saveLocal, loadSettings, saveSettings };
+module.exports = { readJson, writeJson, loadLocal, saveLocal };

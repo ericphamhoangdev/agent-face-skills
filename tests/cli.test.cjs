@@ -105,7 +105,6 @@ test('status works before anything is installed', () => {
     [s.ok, s.running, s.closed, s.state, s.muted, s.volume, s.runtime.installed],
     [true, false, false, 'happy', false, 0.7, false],
   );
-  assert.equal(s.quiet_hours.start, '20:00');
   assert.match(s.version, /^\d+\.\d+\.\d+$/);
 });
 

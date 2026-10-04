@@ -1,6 +1,6 @@
 ---
 name: agent-face-voice
-description: Speak through your face by playing one of its voice clips out loud, with the mouth moving in time. Use when the user asks you to say something aloud, to greet them, or to announce that long work has finished; when they ask about your voice, muting, volume or quiet hours; and when a state should make a sound. Needs the agent-face skill installed next to it.
+description: Speak through your face by playing one of its voice clips out loud, with the mouth moving in time. Use when the user asks you to say something aloud, to greet them, or to announce that long work has finished; when they ask about your voice, muting or volume; and when a state should make a sound. Needs the agent-face skill installed next to it.
 metadata:
   version: "0.1.0"
 ---
@@ -32,14 +32,13 @@ A clip is not tied to an expression. The same line can be said happy, tired or d
 | --- | --- |
 | `played` | It's playing. `duration_ms` is its length; `lip_sync` says whether the mouth is moving. |
 | `muted` | The user muted this face. Nothing played; the text still shows. |
-| `quiet_hours` | The user's quiet hours are on until `until`. Nothing played; the text still shows. |
 
 An unknown clip or state is an error that lists the valid ones, and changes nothing.
 
 ## Manners
 
 - **Speak rarely.** Sound interrupts in a way a picture doesn't. Good moments: the user asked for it, a greeting at the start of the day, long-running work finishing while they're away from the screen. Not every turn, and not for routine updates. That's what states and captions are for.
-- **Mute, volume and quiet hours belong to the user.** They set them from the face's right-click menu (and its speaker button). You can see them in `status` (`muted`, `volume`, `quiet_now`, `quiet_hours`), but never change them, and don't look for another way to make sound when the answer was `muted` or `quiet_hours`. If the user wants you audible, they'll unmute.
+- **Mute and volume belong to the user.** They set them from the face's right-click menu and its speaker button. You can see them in `status` (`muted`, `volume`), but never change them, and don't look for another way to make sound when the answer was `muted`. If the user wants you audible, they'll unmute.
 - **A silent result is fine.** When nothing plays, the text is still shown, so the message got through. Don't retry.
 
 ## Lip-sync

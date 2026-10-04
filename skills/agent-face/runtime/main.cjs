@@ -10,7 +10,6 @@ const path = require('path');
 
 const paths = require('../lib/paths.cjs');
 const store = require('../lib/store.cjs');
-const quiet = require('../lib/quiet.cjs');
 const { loadFace, resolveInside } = require('../lib/config.cjs');
 const { mimeFor } = require('../lib/media.cjs');
 
@@ -128,7 +127,7 @@ function setMuted(muted) {
   send('muted', muted);
 }
 
-/** Play a voice clip unless the face is muted or it's quiet hours. */
+/** Play a voice clip, unless the user muted this face. */
 async function playClip(clipName) {
   const clip = face.clips.find((c) => c.name === clipName);
   if (!clip) {
@@ -141,8 +140,6 @@ async function playClip(clipName) {
   }
   resolveInside(faceDir, path.join('voice', clip.file));
   if (local.muted) return { result: 'muted' };
-  const { quiet_hours: hours } = store.loadSettings();
-  if (quiet.isQuiet(hours)) return { result: 'quiet_hours', until: hours.end };
 
   const playId = ++playSeq;
   const started = new Promise((resolve, reject) => {
@@ -158,7 +155,6 @@ async function playClip(clipName) {
 }
 
 function status() {
-  const { quiet_hours: hours } = store.loadSettings();
   return {
     version: paths.VERSION,
     pid: process.pid,
@@ -168,8 +164,6 @@ function status() {
     caption,
     muted: local.muted,
     volume: local.volume,
-    quiet_now: quiet.isQuiet(hours),
-    quiet_hours: hours,
     ...(faceError ? { face_error: faceError } : {}),
   };
 }
@@ -344,8 +338,6 @@ function closeByUser() {
 }
 
 function popupMenu() {
-  const settings = store.loadSettings();
-  const hours = settings.quiet_hours;
   const volume = (v) => ({
     label: `${Math.round(v * 100)}%`,
     type: 'radio',
@@ -360,19 +352,6 @@ function popupMenu() {
     { type: 'separator' },
     { label: 'Mute voice', type: 'checkbox', checked: local.muted, click: () => setMuted(!local.muted) },
     { label: 'Volume', submenu: [0.25, 0.5, 0.7, 1].map(volume) },
-    {
-      label: `Quiet hours (${hours.start}–${hours.end})`,
-      type: 'checkbox',
-      checked: hours.enabled,
-      click: () => store.saveSettings({ ...settings, quiet_hours: { ...hours, enabled: !hours.enabled } }),
-    },
-    {
-      label: 'Edit sound settings…',
-      click: () => {
-        store.saveSettings(store.loadSettings()); // make sure the file exists
-        shell.openPath(paths.settingsFile());
-      },
-    },
     { type: 'separator' },
     { label: 'Open face folder', click: () => shell.openPath(faceDir) },
     { label: 'Close face', click: closeByUser },

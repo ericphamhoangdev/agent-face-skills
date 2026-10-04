@@ -14,7 +14,7 @@ const VERSION = fs.readFileSync(path.join(SKILL_ROOT, 'VERSION'), 'utf8').trim()
 const FACE_FOLDER = 'agent-face';
 
 /**
- * Per-user data: window layout, mute/volume, sound settings, the window
+ * Per-user data: window layout, mute and volume per face, the window
  * runtime and logs. Never inside a repo, so none of it can be committed.
  */
 function home() {
@@ -62,7 +62,6 @@ function endpoint(id) {
 const localFile = (id) => path.join(home(), 'faces', `${id}.json`);
 const logFile = (id) => path.join(home(), 'logs', `${id}.log`);
 const electronDataDir = (id) => path.join(home(), 'electron', id);
-const settingsFile = () => path.join(home(), 'settings.json');
 const runtimeDir = () => path.join(home(), 'runtime');
 
 module.exports = {
@@ -76,6 +75,5 @@ module.exports = {
   localFile,
   logFile,
   electronDataDir,
-  settingsFile,
   runtimeDir,
 };

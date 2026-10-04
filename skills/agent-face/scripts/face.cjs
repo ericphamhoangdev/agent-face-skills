@@ -9,7 +9,6 @@ const path = require('path');
 
 const paths = require('../lib/paths.cjs');
 const store = require('../lib/store.cjs');
-const quiet = require('../lib/quiet.cjs');
 const ipc = require('../lib/ipc.cjs');
 const { loadFace, resolveInside } = require('../lib/config.cjs');
 const { mediaInfo } = require('../lib/media.cjs');
@@ -26,7 +25,7 @@ Show and drive the face in ./agent-face (or --face <dir>).
   init [--name "Name"]           create a starter face in ./agent-face
   start                          show the face
   stop                           close the face until "start"
-  status                         running? which state? sound settings, versions
+  status                         running? which state? mute and volume, versions
   states                         list the face's states
   state <name> [--caption "…"]   switch state
   random [--caption "…"]         switch to a random other state
@@ -87,12 +86,19 @@ async function hello(endpoint) {
   }
 }
 
-/** `{ path, version }` of the installed window runtime, or null. */
+const electronPackage = () => path.join(paths.runtimeDir(), 'node_modules', 'electron');
+
+/**
+ * `{ path, version }` of the installed window runtime, or null. Looks at
+ * the files only: loading the electron package would start a download
+ * (and print to stdout) when its binary isn't there yet.
+ */
 function electronInfo() {
-  const dir = path.join(paths.runtimeDir(), 'node_modules', 'electron');
+  const dir = electronPackage();
   try {
-    const binary = require(dir); // the electron package exports the path of its binary
-    if (typeof binary !== 'string' || !fs.existsSync(binary)) return null;
+    // path.txt names the binary inside dist/, e.g. "electron.exe".
+    const binary = path.join(dir, 'dist', fs.readFileSync(path.join(dir, 'path.txt'), 'utf8').trim());
+    if (!fs.existsSync(binary)) return null;
     return { path: binary, version: store.readJson(path.join(dir, 'package.json'), {}).version || null };
   } catch {
     return null;
@@ -184,11 +190,14 @@ function setup() {
   }
   // npm's own output goes to stderr so stdout stays one JSON document. A
   // fixed command line through the shell: on Windows npm is a .cmd file.
-  const npm = spawnSync(`npm install electron@${ELECTRON_MAJOR} --no-audit --no-fund --loglevel=error`, {
-    cwd: dir,
-    stdio: ['ignore', 2, 2],
-    shell: true,
-  });
+  const toStderr = { cwd: dir, stdio: ['ignore', 2, 2] };
+  const npm = spawnSync(`npm install electron@${ELECTRON_MAJOR} --no-audit --no-fund --loglevel=error`, { ...toStderr, shell: true });
+  // The npm package is only a launcher; its own installer fetches the
+  // binary (recent versions leave that until first use).
+  const installer = path.join(electronPackage(), 'install.js');
+  if (npm.status === 0 && !electronInfo() && fs.existsSync(installer)) {
+    spawnSync(process.execPath, [installer], toStderr);
+  }
   const electron = electronInfo();
   if (npm.status !== 0 || !electron) {
     throw new CliError('could not install the window runtime', { hint: `npm install electron@${ELECTRON_MAJOR} failed in ${dir}` });
@@ -208,7 +217,6 @@ async function status(faceDir) {
   const id = paths.faceId(faceDir);
   const up = await hello(paths.endpoint(id));
   const local = store.loadLocal(id);
-  const settings = store.loadSettings();
   const electron = electronInfo();
   let face = null;
   let faceError = null;
@@ -228,8 +236,6 @@ async function status(faceDir) {
     caption: up ? up.caption : null,
     muted: local.muted,
     volume: local.volume,
-    quiet_now: quiet.isQuiet(settings.quiet_hours),
-    quiet_hours: settings.quiet_hours,
     runtime: electron ? { installed: true, electron: electron.version } : { installed: false, hint: 'run: face.cjs setup' },
     ...(up && up.version !== paths.VERSION
       ? { window_version: up.version, note: 'The window is still on the previous version; the next state change restarts it.' }

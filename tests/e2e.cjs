@@ -66,10 +66,9 @@ try {
     assert.equal(face(['status']).runtime.installed, true);
   });
 
-  // Silent run: this face at volume 0, quiet hours off in the test data folder.
+  // Silent run: this face plays at volume 0.
   const id = paths.faceId(faceDir);
   store.saveLocal(id, { ...store.loadLocal(id), volume: 0 });
-  store.saveSettings({ quiet_hours: { enabled: false, start: '20:00', end: '08:00' } });
   // A clip long enough to photograph: a steady tone from 0.3 s to 2.3 s.
   const rate = 22050;
   const tone = new Int16Array(rate * 2.5);
