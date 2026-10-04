@@ -22,7 +22,11 @@ let mouthReady = Promise.resolve();
 let mouthSettled = () => {};
 /** Object URL of a closed-mouth frame made from an animation, to free later. */
 let madeStill = null;
-/** The clip being spoken: { playId, context, source, timer }. */
+/**
+ * The clip being spoken: { playId, context, source, clip, tuning, startAt, timer }.
+ * It outlives redraws: a new state or an edited template changes the
+ * picture, not the voice.
+ */
 let talking = null;
 
 function setCaption(text) {
@@ -50,7 +54,9 @@ function dropMouth() {
 }
 
 function show(view) {
-  stopTalking();
+  // Keep talking through a redraw: the mouth stops until the new state's
+  // frames are ready, then carries on with them (see startMouth).
+  stopMouth();
   dropMouth();
   mouthSettled(); // nobody should keep waiting for the previous view
   current = view;
@@ -111,6 +117,7 @@ faceImg.addEventListener('load', async () => {
     if (current !== view) return; // the state changed while these were loading
     mouthBox.replaceChildren(...frames);
     mouth = frames;
+    startMouth(); // mid-sentence: the new state's mouth takes over
   } finally {
     settled();
   }
@@ -127,10 +134,44 @@ function setMouth(level) {
   if (mouth) mouth.forEach((frame, i) => (frame.hidden = i !== level));
 }
 
+/** Stop moving the mouth and show the state's normal image. The voice carries on. */
+function stopMouth() {
+  if (talking) clearTimeout(talking.timer);
+  setMouth(null);
+}
+
+/**
+ * Move the mouth with the clip being spoken, using the frames of the state
+ * on screen. The whole clip is measured up front, so the mouth follows a
+ * plan rather than chasing the sound; the audio clock keeps them in step.
+ */
+function startMouth() {
+  if (!talking || !mouth) return false;
+  const t = talking;
+  clearTimeout(t.timer);
+  const frames = mouth.length - 1;
+  const channels = Array.from({ length: t.clip.numberOfChannels }, (_, c) => t.clip.getChannelData(c));
+  const plan = lipSync.mouthLevels(channels, t.clip.sampleRate, frames, t.tuning);
+  const frameSet = mouth;
+  const tick = () => {
+    if (talking !== t || mouth !== frameSet) return;
+    // Output latency: how long a sample takes to reach the speakers (large on wireless ones).
+    const heardMs = (t.context.currentTime - t.startAt - (t.context.outputLatency || 0)) * 1000;
+    const step = Math.floor(heardMs / plan.step_ms);
+    setMouth(step < 0 || step >= plan.levels.length ? 0 : Math.min(plan.levels[step], frames));
+    const untilNext = plan.step_ms - (((heardMs % plan.step_ms) + plan.step_ms) % plan.step_ms);
+    t.timer = setTimeout(tick, Math.max(4, untilNext));
+  };
+  tick();
+  return true;
+}
+
+/** Stop the clip being spoken: a new clip, or muting. */
 function stopTalking() {
   if (!talking) return;
-  const { context, source, timer } = talking;
+  const { playId, context, source, timer } = talking;
   talking = null;
+  host.send('play-ended', { playId, cut: true });
   clearTimeout(timer);
   source.onended = null;
   try {
@@ -214,12 +255,6 @@ async function play({ playId, url, tone, volume, lip_sync: tuning }) {
     // mouth frames a moment to finish loading rather than speak without them.
     await Promise.race([mouthReady, new Promise((resolve) => setTimeout(resolve, 2000))]);
 
-    // Measure the whole clip before it starts, so the mouth is driven by a
-    // plan rather than chasing the sound.
-    const frames = mouth ? mouth.length - 1 : 0;
-    const channels = Array.from({ length: clip.numberOfChannels }, (_, c) => clip.getChannelData(c));
-    const plan = frames ? lipSync.mouthLevels(channels, clip.sampleRate, frames, tuning) : null;
-
     const source = audio.createBufferSource();
     const gain = audio.createGain();
     source.buffer = clip;
@@ -228,7 +263,7 @@ async function play({ playId, url, tone, volume, lip_sync: tuning }) {
     const startAt = audio.currentTime + 0.05;
     source.start(startAt);
     const context = audio;
-    talking = { playId, context, source, timer: undefined };
+    talking = { playId, context, source, clip, tuning, startAt, timer: undefined };
     source.onended = () => {
       if (talking && talking.playId === playId) {
         clearTimeout(talking.timer);
@@ -238,25 +273,13 @@ async function play({ playId, url, tone, volume, lip_sync: tuning }) {
       context.close().catch(() => {});
       host.send('play-ended', { playId });
     };
+    const moving = startMouth();
     host.send('play-started', {
       playId,
       duration_ms: Math.round(clip.duration * 1000),
-      lip_sync: Boolean(plan),
+      lip_sync: moving,
       audio: await describeAudio(audio),
     });
-
-    if (!plan) return;
-    // The audio clock keeps the mouth in step; the output latency is how
-    // long a sample takes to reach the speakers (large on wireless ones).
-    const tick = () => {
-      if (!talking || talking.playId !== playId) return;
-      const heardMs = (audio.currentTime - startAt - (audio.outputLatency || 0)) * 1000;
-      const step = Math.floor(heardMs / plan.step_ms);
-      setMouth(step < 0 || step >= plan.levels.length ? 0 : Math.min(plan.levels[step], frames));
-      const untilNext = plan.step_ms - (((heardMs % plan.step_ms) + plan.step_ms) % plan.step_ms);
-      talking.timer = setTimeout(tick, Math.max(4, untilNext));
-    };
-    tick();
   } catch (e) {
     if (audio && !(talking && talking.context === audio)) audio.close().catch(() => {});
     host.send('play-started', { playId, error: e.message || String(e) });
@@ -287,11 +310,7 @@ host.on('picture', async ({ pictureId, max }) => {
     host.send('picture-result', { pictureId, error: e.message || String(e) });
   }
 });
-host.on('stop-audio', () => {
-  const playId = talking && talking.playId;
-  stopTalking();
-  if (playId) host.send('play-ended', { playId });
-});
+host.on('stop-audio', stopTalking);
 
 // Drag anywhere on the face to move it.
 let dragging = false;

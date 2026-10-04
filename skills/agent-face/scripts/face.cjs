@@ -296,6 +296,8 @@ async function status(faceFolder) {
     closed: !up && local.closed,
     state: up ? up.state : remembered || (template ? template.default_state : null),
     caption: up ? up.caption : null,
+    speaking: up ? Boolean(up.speaking) : false,
+    ...(up && up.speaking ? { ms_left: up.ms_left } : {}),
     muted: local.muted,
     volume: local.volume,
     runtime: electron ? { installed: true, electron: electron.version } : { installed: false, hint: 'run: face.cjs setup' },

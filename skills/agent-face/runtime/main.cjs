@@ -63,6 +63,8 @@ let playSeq = 0;
 const pendingPlays = new Map();
 /** The caption a playing clip put up, cleared when that clip ends. */
 let clipCaption = null;
+/** The clip being spoken: { playId, label, ends_at } until it ends or is cut off. */
+let speaking = null;
 let pictureSeq = 0;
 /** Pictures waiting for the page to draw them. */
 const pendingPictures = new Map();
@@ -128,8 +130,9 @@ function setState(name, { sound = true } = {}) {
   const changed = local.state !== name;
   local.state = name;
   persist();
-  caption = null; // a caption belongs to the state it was set on
-  clipCaption = null;
+  // A caption belongs to the state it was set on, except a clip's text: the
+  // clip keeps playing through the change, so its words stay up.
+  if (!clipCaption) caption = null;
   redraw();
   if (changed && sound && state.sound) {
     playClip(state.sound).catch((e) => log(`sound for state '${name}':`, e.message));
@@ -141,8 +144,7 @@ function useTemplate(template) {
   local.template = template;
   reload();
   persist();
-  caption = null;
-  clipCaption = null;
+  if (!clipCaption) caption = null; // a playing clip keeps its words up, as in setState
   redraw();
 }
 
@@ -182,6 +184,7 @@ async function startPlayback(label, what) {
   send('play', { playId, ...what, volume: local.volume, lip_sync: face.lip_sync });
   try {
     const { duration_ms, lip_sync, audio } = await started;
+    speaking = { playId, label, ends_at: Date.now() + duration_ms };
     log(`played ${label} (${duration_ms} ms) at volume ${local.volume} on ${audio.device}, output ${audio.state}, latency ${audio.output_latency_ms} ms`);
     return { result: 'played', duration_ms, lip_sync, volume: local.volume, audio, playId };
   } catch (e) {
@@ -207,6 +210,9 @@ function picture() {
   return drawn;
 }
 
+/** A clip is playing. The end time is a backstop in case the page never says it ended. */
+const isSpeaking = () => Boolean(speaking && Date.now() < speaking.ends_at + 1000);
+
 function status() {
   const state = face && face.states.find((s) => s.name === local.state);
   return {
@@ -219,6 +225,9 @@ function status() {
     /** The current state's own image file, in the agent's repo. */
     image: state ? path.join(face.dir, state.file) : null,
     caption,
+    /** True while a clip is playing; ms_left says for how much longer. */
+    speaking: isSpeaking(),
+    ...(isSpeaking() ? { ms_left: Math.max(0, speaking.ends_at - Date.now()) } : {}),
     muted: local.muted,
     volume: local.volume,
     ...(faceError ? { face_error: faceError } : {}),
@@ -568,6 +577,7 @@ ipcMain.on('picture-result', (_event, message) => {
   else pending.resolve(message);
 });
 ipcMain.on('play-ended', (_event, { playId }) => {
+  if (speaking && speaking.playId === playId) speaking = null;
   if (clipCaption && clipCaption.playId === playId && caption === clipCaption.text) setCaption(null);
 });
 

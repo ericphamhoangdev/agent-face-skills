@@ -2,7 +2,7 @@
 name: agent-face-voice
 description: Speak through your face by playing one of its voice clips out loud, with the mouth moving in time. Use when the user asks you to say something aloud, to greet them, or to announce that long work has finished; when they ask about your voice, muting or volume; and when a state should make a sound. Needs the agent-face skill installed next to it.
 metadata:
-  version: "0.2.1"
+  version: "0.2.2"
 ---
 
 # Agent Face — voice
@@ -27,7 +27,9 @@ face.cjs say <clip> --caption "Build is green"  # show this instead of the clip'
 
 A clip is not tied to an expression. The same line can be said happy, tired or determined, so you choose the state that fits the moment, or leave the face as it is.
 
-`say` returns as soon as the clip starts; it doesn't wait for it to finish. The result tells you what happened:
+`say` returns as soon as the clip starts; it doesn't wait for it to finish. Changing state or template while it plays (your end-of-turn update, for instance) changes the face but not the voice: the clip plays to the end, its words stay up, and the mouth carries on with the new state's frames. Only another clip cuts it off, so if you want to say two things, check `status`: `speaking` is true while a clip plays, and `ms_left` says for how much longer.
+
+The result tells you what happened:
 
 | `result` | Meaning |
 | --- | --- |

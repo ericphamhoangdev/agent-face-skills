@@ -2,7 +2,7 @@
 name: agent-face-template
 description: Create or change your face templates, meaning the sub-folders of .agent-face/ in your repo that hold the state images, lip-sync mouth frames and voice clips. Use when the user wants a new face or another look, new or changed states or expressions, animated states, a talking mouth, voice clips added or lip-sync tuned; when moving templates over from the old Agent Face MCP app or from the agent-face/ folder of version 0.1; and whenever face.cjs check reports problems. Needs the agent-face skill installed next to it.
 metadata:
-  version: "0.2.1"
+  version: "0.2.2"
 ---
 
 # Agent Face — templates

@@ -2,7 +2,7 @@
 name: agent-face
 description: Give yourself a floating face on the user's desktop and keep it in step with what you are doing, with no MCP server. Use at the start and end of every turn to set the face's state (working, thinking, happy…) and an optional caption; whenever the user mentions your face, avatar or expression, asks you to show, hide, switch or fix it, or asks to see your face in the chat; to list your face templates and their states and voice clips; and for first-time setup. Your face templates live in your own repo (.agent-face/); this skill ships the window and the face.cjs command that drives it.
 metadata:
-  version: "0.2.1"
+  version: "0.2.2"
 ---
 
 # Agent Face
@@ -46,7 +46,7 @@ That's two updates per turn, including short chat-only turns.
 - **Captions are optional.** Use one when it tells the user something the face can't, such as "running the test suite". Keep it to a few words (60 characters at most). A caption is cleared by the next state change.
 - **Don't talk about the face in your replies** unless the user asks about it. It's a side channel; narrating it ("I've set my face to happy") is noise.
 
-Face commands are fast, so run them alongside your other tool calls rather than as separate steps.
+Face commands are fast, so run them alongside your other tool calls rather than as separate steps. A state change doesn't interrupt a clip the face is speaking.
 
 ## Templates
 

@@ -2,6 +2,11 @@
 
 Install an update with `npx skills update -y`. The face window restarts itself on the new version the next time the agent uses it.
 
+## 0.2.2 — 2026-10-05
+
+- **Fix: speech was cut off by a state change.** Any redraw of the face — a new state (an agent's end-of-turn update, often right after `say`), a template switch, or a file changing in `.agent-face/` — stopped the clip being spoken. Now the voice plays to the end, the clip's words stay up, and the mouth carries on with the new state's frames. Only another clip cuts it off.
+- **`status` says when the face is speaking:** `speaking`, and `ms_left` while it is.
+
 ## 0.2.1 — 2026-10-05
 
 - **Fix: clips could play silently.** The face kept one audio connection open for its whole life, and a speaker that slept, reconnected or changed could leave it playing to nowhere, while `say` still said `played` and the mouth moved. Each clip now opens the speakers that are current at that moment, and closes them when it ends.

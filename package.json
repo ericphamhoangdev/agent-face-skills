@@ -1,6 +1,6 @@
 {
   "name": "agent-face-skills",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "license": "MIT",
   "description": "Agent skills that give a coding agent a floating face on the desktop. No MCP server, no port.",

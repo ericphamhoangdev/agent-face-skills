@@ -135,6 +135,32 @@ try {
     assert.ok(face(['snapshot', after]).ok && fs.readFileSync(after).equals(closed), 'snapshots of a still face are identical');
   });
 
+  step('changing state or template mid-sentence keeps the voice going', () => {
+    const said = face(['say', 'tone', '--caption', 'still talking']);
+    assert.equal(said.result, 'played');
+    sleep(400);
+    assert.equal(face(['state', 'working']).state, 'working');
+    sleep(300);
+    let s = face(['status']);
+    assert.deepEqual([s.speaking, s.state, s.caption], [true, 'working', 'still talking'], 'a state change is not a stop');
+    assert.ok(s.ms_left > 500, `still ${s.ms_left} ms to go`);
+    assert.equal(face(['use', 'alt']).template, 'alt');
+    sleep(300);
+    s = face(['status']);
+    assert.deepEqual([s.speaking, s.caption], [true, 'still talking'], 'nor is a template switch');
+    face(['use', 'starter']);
+    sleep(Math.max(0, s.ms_left) + 800);
+    s = face(['status']);
+    assert.deepEqual([s.speaking, s.caption], [false, null], 'the clip ended on its own and took its words with it');
+    // A new clip does cut the old one off.
+    face(['say', 'tone']);
+    sleep(300);
+    face(['say', 'hello']);
+    sleep(200);
+    assert.ok(face(['status']).ms_left < 1000, 'the 4 s tone was replaced by the short clip');
+    sleep(1200);
+  });
+
   step('current describes the face and makes a picture for the chat', () => {
     face(['state', 'happy', '--caption', 'hello there']);
     const png = path.join(root, 'current.png');
