@@ -9,7 +9,15 @@ Thumbs.db
 # agent's own repo — never in this one.
 /.agent-face/
 
-# Skills installed into this checkout while testing the installer.
+# Skills installed into this checkout while testing the installer, and
+# local Claude settings. The repo's own rules and safety-scan skill are kept.
 /.agents/
-/.claude/
+/.claude/*
+!/.claude/rules/
+!/.claude/skills/
+/.claude/skills/*
+!/.claude/skills/repo-safety-scan/
 /skills-lock.json
+
+# The user's personal terms for the safety scan: never committed.
+/.claude/skills/repo-safety-scan/personal-terms.local.json

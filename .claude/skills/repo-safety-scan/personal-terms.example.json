@@ -1,0 +1,5 @@
+{
+  "_about": "Copy this file to personal-terms.local.json (git-ignored) and list what identifies you: names, emails, user and machine names, private project names. Terms match anywhere, ignoring case. 'allow' lists text that may appear even though it contains a term, such as your public handle in the repo's own URL.",
+  "terms": ["Jane Example", "jane.example", "JANE-LAPTOP", "my-private-project"],
+  "allow": ["jane-example-dev"]
+}

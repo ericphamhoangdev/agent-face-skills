@@ -6,13 +6,18 @@
 //   - a file contains something that looks personal (a home-folder path or
 //     an email address);
 //   - a skill is malformed or the version numbers disagree.
+// It checks every file git would commit (tracked, or untracked and not
+// ignored), so git-ignored local files such as the safety scan's personal
+// terms are never read. The deeper scan, history included, is the
+// repo-safety-scan skill in .claude/skills/.
 
+const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const SKIP_ANYWHERE = new Set(['.git', 'node_modules']);
-/** Git-ignored folders left at the top level by trying the skills here. */
+/** Git-ignored folders left at the top level by trying the skills here (used without git). */
 const SKIP_AT_ROOT = new Set(['.agents', '.claude', '.agent-face']);
 const MEDIA = new Set([
   '.png', '.apng', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico', '.bmp', '.avif', '.tiff',
@@ -26,6 +31,17 @@ const PERSONAL = [
 ];
 /** SSH remotes such as `git@host:owner/repo.git` are addresses of repos, not of people. */
 const SSH_REMOTE = /\bgit@[A-Za-z0-9.-]+:/g;
+
+/** Absolute paths of the files git would commit, or null outside a git checkout. */
+function committable() {
+  const run = spawnSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: ROOT, encoding: 'utf8' });
+  if (run.status !== 0) return null;
+  return run.stdout
+    .split('\0')
+    .filter(Boolean)
+    .map((rel) => path.join(ROOT, rel))
+    .filter((file) => fs.existsSync(file) && fs.statSync(file).isFile()); // not deleted, not a submodule
+}
 
 function* walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -54,7 +70,7 @@ function checkRepo() {
   const problems = [];
   const rel = (file) => path.relative(ROOT, file).split(path.sep).join('/');
 
-  for (const file of walk(ROOT)) {
+  for (const file of committable() || walk(ROOT)) {
     if (MEDIA.has(path.extname(file).toLowerCase())) {
       problems.push(`${rel(file)}: media files don't belong in this repo`);
       continue;
