@@ -35,6 +35,14 @@ If you reach the repo over SSH, the git address works the same way:
 npx skills add git@github.com:ericphamhoangdev/agent-face-skills.git --skill '*' --agent claude-code --yes
 ```
 
+Or install from a local clone, for example when you can't reach the repo from that machine:
+
+```bash
+npx skills add /path/to/agent-face-skills --skill '*' --agent claude-code --yes
+```
+
+`npx skills update` doesn't refresh a local install; run the same `add` command again after pulling the clone.
+
 Then ask the agent to set up its face, or do it yourself:
 
 ```bash
