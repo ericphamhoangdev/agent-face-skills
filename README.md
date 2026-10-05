@@ -103,6 +103,18 @@ An agent's face lives in `.agent-face/` in its repo. Each sub-folder is a **temp
 
 Edit a file and the window redraws within a second. The format is described in [template-format.md](skills/agent-face-template/references/template-format.md).
 
+### Making the art
+
+What has worked for a full talking, blinking face:
+
+- **Edit, don't re-prompt.** Generate the first states together (for example four expressions in one 2×2 grid, with the character described in full), then make every later picture as an edit of an existing one: "keep everything identical, change one thing only". Separate generations drift, and a face that changes between states looks broken.
+- **An image model that edits a reference and returns real transparency.** The Codex CLI signed in with ChatGPT does both from the command line (`codex exec -i <reference.png> …`). Ask for a "fully transparent background" every time.
+- **One 1024 master per state, everything else made from it.** Crop to the figure, keep one figure height across states, bottom-align. The face shows 512 px copies.
+- **Mouth frames:** edit the master to an open mouth, then copy *only the mouth* back onto the original through a soft mask, because the model redraws the whole picture slightly. Then resize the still and the open mouth identically, and `check` confirms they line up.
+- **Animated states** can be made from one still with Pillow: about 25 frames of gentle breathing, tilt or bounce, with a blink pasted from one eyes-closed edit, saved as animated WebP.
+
+The step-by-step guide, with commands and settings, is [making-art.md](skills/agent-face-template/references/making-art.md).
+
 Because templates live in the agent's repo, **their art and voice are published wherever that repo is.** Keep the folder out of commits if that's not what you want.
 
 ## Commands

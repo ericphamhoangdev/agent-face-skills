@@ -61,7 +61,7 @@ Template ids are folder names: letters, digits, `-`, `_` and `.`. Keep them shor
 - Paths are relative to the template's folder and can't point outside it, not even into another template.
 - Keep each file to a few MB. A reasonable size for art is 512 px on the long side.
 
-The full field reference, including lip-sync tuning, is in `references/template-format.md`.
+The full field reference, including lip-sync tuning, is in `references/template-format.md`. How to make the art itself (consistent states, transparent backgrounds, mouth frames that line up, animated states) is in `references/making-art.md`.
 
 ## A talking mouth
 
