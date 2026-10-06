@@ -35,6 +35,25 @@ test('help is plain text', () => {
   assert.match(run.stdout, /Usage: node face\.cjs/);
 });
 
+test('the shipped Spark example is a valid three-format template', () => {
+  const exampleRepo = path.join(root, 'example-repo');
+  const exampleFace = path.join(exampleRepo, '.agent-face', 'spark');
+  fs.mkdirSync(path.join(exampleRepo, '.git'), { recursive: true });
+  fs.cpSync(path.join(__dirname, '..', 'examples', 'spark'), exampleFace, { recursive: true });
+
+  const checked = face(['check', '--template', 'spark'], exampleRepo);
+  assert.equal(checked.code, 0, checked.stdout + checked.stderr);
+  assert.equal(checked.json.ok, true);
+  assert.deepEqual(
+    checked.json.templates[0].states.map(({ name, file, width, height, frames }) => ({ name, file, width, height, frames })),
+    [
+      { name: 'idle', file: 'idle.png', width: 512, height: 512, frames: 1 },
+      { name: 'thinking', file: 'thinking.gif', width: 512, height: 512, frames: 18 },
+      { name: 'happy', file: 'happy.webp', width: 512, height: 512, frames: 24 },
+    ],
+  );
+});
+
 test('without any template, commands say how to get one', () => {
   const run = face(['states']);
   assert.equal(run.code, 1);

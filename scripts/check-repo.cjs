@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 'use strict';
 // Guard for a public repo. Fails when:
-//   - an image, audio or video file is present (faces and clips belong in
-//     each agent's own repo; starter art and test audio are made by code);
+//   - an image, audio or video file is present outside the curated Spark
+//     example (faces and clips otherwise belong in each agent's own repo);
 //   - a file contains something that looks personal (a home-folder path or
 //     an email address);
 //   - a skill is malformed or the version numbers disagree.
@@ -23,6 +23,11 @@ const MEDIA = new Set([
   '.png', '.apng', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico', '.bmp', '.avif', '.tiff',
   '.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac', '.opus',
   '.mp4', '.webm', '.mov', '.mkv',
+]);
+const ALLOWED_MEDIA = new Set([
+  'examples/spark/idle.png',
+  'examples/spark/thinking.gif',
+  'examples/spark/happy.webp',
 ]);
 const PERSONAL = [
   [/[A-Za-z]:[\\/]+Users[\\/]+(?!example\b|you\b|me\b|name\b|<)[^\\/\s"'`]+/, 'a Windows home-folder path'],
@@ -72,7 +77,7 @@ function checkRepo() {
 
   for (const file of committable() || walk(ROOT)) {
     if (MEDIA.has(path.extname(file).toLowerCase())) {
-      problems.push(`${rel(file)}: media files don't belong in this repo`);
+      if (!ALLOWED_MEDIA.has(rel(file))) problems.push(`${rel(file)}: media files don't belong in this repo`);
       continue;
     }
     const text = fs.readFileSync(file, 'utf8');

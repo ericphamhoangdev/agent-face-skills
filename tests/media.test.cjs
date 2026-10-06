@@ -1,5 +1,5 @@
 'use strict';
-// Image headers are built by hand here: this repo holds no image files.
+// Image headers are built by hand here so the parser tests stay tiny and exact.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');

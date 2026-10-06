@@ -67,6 +67,9 @@ test('files judged by their names', () => {
   assert.deepEqual(found('.env.example'), []);
   assert.deepEqual(found('keys/server.pem'), ['blocker:key-file']);
   assert.deepEqual(found('art/face.png'), ['blocker:media']);
+  assert.deepEqual(found('examples/spark/idle.png'), []);
+  assert.deepEqual(found('examples/spark/thinking.gif'), []);
+  assert.deepEqual(found('examples/spark/happy.webp'), []);
   assert.deepEqual(found('x/personal-terms.local.json'), ['blocker:local-terms', 'warning:local-file']);
   assert.deepEqual(found(`docs/${TERM}.md`), ['blocker:personal-term']);
 });

@@ -49,7 +49,7 @@ Generic patterns can't know the user's name, machine or private projects. Those 
 
 1. Stage exactly what the commit should hold, then run `--staged` with the message you're going to use.
 2. If the staged changes touch code (`git diff --cached --stat`), read the diff against [references/security-checklist.md](references/security-checklist.md). The patterns only point at suspects; the checklist is the review.
-3. Run `npm test`. It includes the repo guard: no media, no home paths, no emails, well-formed skills.
+3. Run `npm test`. It includes the repo guard: only approved example media, no home paths, no emails, well-formed skills.
 4. Commit only with 0 blockers. Look at every warning, and fix it or, if it's a genuine false positive, mark it (see below). Never commit something "for now" to fix later: once it's pushed, it's in the history.
 
 If a blocker can't be fixed without the user (their identity, or a value only they know is public), stop. Tell them what is where (file, line, commit) and wait.
@@ -65,7 +65,7 @@ Run `--history` and `--tree`. Every blocker in the history must be gone before t
 - Replace real values with invented ones: `my-app`, `C:/code/my-app`, `Acme Ltd`, `you@example.com`, `<token>`. Never use the user's own projects, paths or data as examples. <!-- safety-scan: allow (invented examples) -->
 - Values the code needs at run time come from an environment variable or a git-ignored local file. Commit an `.example` copy with placeholders.
 - A file that shouldn't be committed at all: `git restore --staged <file>`, then add it to `.gitignore`.
-- Media: this repo ships none. Generate what tests need in code, as `skills/agent-face/lib/starter.cjs` does.
+- Media: only the reviewed files in `examples/spark/` are allowed. Generate what tests need in code, as `skills/agent-face/lib/starter.cjs` does.
 
 **The commit identity.** Git necessarily publishes author and committer identity fields, so contributor emails are allowed there. A contributor who prefers not to publish a personal address can use GitHub's no-reply address in this repo's config:
 
