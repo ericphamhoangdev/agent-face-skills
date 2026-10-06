@@ -23,6 +23,19 @@ your agent's repo                       your machine
 
 ## Install
 
+### Claude Code marketplace
+
+Add this repository as a marketplace, then install the plugin:
+
+```bash
+claude plugin marketplace add ericphamhoangdev/agent-face-skills
+claude plugin install agent-face@agent-face-skills
+```
+
+The plugin includes all three Agent Face skills.
+
+### Skills CLI
+
 In the agent's project:
 
 ```bash

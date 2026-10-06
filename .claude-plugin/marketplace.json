@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "agent-face-skills",
+  "description": "Agent skills that give a coding agent a floating face on the desktop.",
+  "owner": {
+    "name": "ericphamhoangdev"
+  },
+  "plugins": [
+    {
+      "name": "agent-face",
+      "description": "Give a coding agent a floating desktop face with visual states, custom templates, and voice clips.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/agent-face",
+        "./skills/agent-face-template",
+        "./skills/agent-face-voice"
+      ]
+    }
+  ]
+}
