@@ -1,0 +1,44 @@
+name: PR safety
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-safety-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  safety:
+    name: Secrets and personal data
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the proposed merge
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Run tests and repository policy checks
+        run: npm test
+
+      - name: Scan the proposed merged tree
+        run: node .claude/skills/repo-safety-scan/scripts/scan.cjs --tree --strict
+
+      - name: Scan every commit introduced by the PR
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node .claude/skills/repo-safety-scan/scripts/scan.cjs --history --range "$BASE_SHA..$HEAD_SHA" --strict
