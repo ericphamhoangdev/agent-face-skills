@@ -74,10 +74,9 @@ test('files judged by their names', () => {
   assert.deepEqual(found(`docs/${TERM}.md`), ['blocker:personal-term']);
 });
 
-test('commit identities: personal emails are blockers, no-reply ones are not', () => {
-  assert.equal(identityFindings(ctx(), 'author', 'Jane', PERSONAL_EMAIL)[0].rule, 'identity-email');
+test('commit identities: contributor emails are allowed, personal names are not', () => {
+  assert.deepEqual(identityFindings(ctx(), 'author', 'Jane', PERSONAL_EMAIL), []);
   assert.deepEqual(identityFindings(ctx(), 'author', 'jdoe-dev', NOREPLY), []);
-  assert.deepEqual(identityFindings(ctx([], [PERSONAL_EMAIL]), 'author', 'Jane', PERSONAL_EMAIL), [], 'an allowed email');
   assert.equal(identityFindings(ctx(['Jane Doe']), 'committer', 'Jane Doe', NOREPLY)[0].rule, 'identity-name');
 });
 
@@ -146,7 +145,28 @@ test('history: a secret removed later is still found, with the commits that adde
   assert.ok(!JSON.stringify(history.out).includes(AWS_KEY), 'a secret is never printed in full');
 });
 
-test('history: commit identities, messages and folder names are checked', { skip: !hasGit }, (t) => {
+test('history range checks PR commits but excludes existing base history', { skip: !hasGit }, (t) => {
+  const repo = makeRepo(t);
+  repo.write('README.md', 'clean base\n');
+  repo.git(['add', '.']);
+  repo.git(['commit', '-q', '-m', 'base'], { GIT_AUTHOR_EMAIL: PERSONAL_EMAIL });
+  const base = repo.git(['rev-parse', 'HEAD']);
+
+  repo.write('config.js', `module.exports = { key: '${AWS_KEY}' };\n`);
+  repo.git(['add', '.']);
+  repo.git(['commit', '-q', '-m', 'temporary config']);
+  repo.write('config.js', 'module.exports = { key: process.env.KEY };\n');
+  repo.git(['commit', '-q', '-am', 'remove temporary value']);
+  const head = repo.git(['rev-parse', 'HEAD']);
+
+  const range = repo.scan(['--history', '--range', `${base}..${head}`]);
+  assert.equal(range.code, 1);
+  assert.ok(has(range, 'aws-key'));
+  assert.ok(!has(range, 'email'), 'the existing base identity email is allowed and outside the PR range');
+  assert.match(range.out.notes.join('\n'), /only commits in/);
+});
+
+test('history: contributor emails are allowed, while messages and folder names are checked', { skip: !hasGit }, (t) => {
   const repo = makeRepo(t);
   repo.write(`${TERM}/notes.md`, 'hello\n');
   repo.git(['add', '.']);
@@ -154,8 +174,7 @@ test('history: commit identities, messages and folder names are checked', { skip
 
   const history = repo.scan(['--history']);
   assert.equal(history.code, 1);
-  assert.ok(has(history, 'identity-email', { what: 'author email', match: PERSONAL_EMAIL }));
-  assert.ok(!has(history, 'identity-email', { what: 'committer email' }), 'the committer used a no-reply address');
+  assert.ok(!has(history, 'identity-email'), 'contributor identity emails are allowed');
   assert.ok(has(history, 'email', { path: '(commit message)' }));
   assert.ok(has(history, 'personal-term', { path: TERM }), 'reported once, at the folder');
   assert.equal(history.out.findings.filter((f) => f.rule === 'personal-term').length, 1);
@@ -169,7 +188,7 @@ test('staged: a clean commit passes; personal data, identity and risky code are 
   const clean = repo.scan(['--staged', '--message', 'docs: install']);
   assert.equal(clean.code, 0, JSON.stringify(clean.out));
 
-  assert.ok(has(repo.scan(['--staged'], { GIT_AUTHOR_EMAIL: PERSONAL_EMAIL }), 'identity-email', { what: 'author email' }));
+  assert.equal(repo.scan(['--staged'], { GIT_AUTHOR_EMAIL: PERSONAL_EMAIL }).code, 0, 'contributor identity emails are allowed');
   const message = repo.scan(['--staged', '--message', `thanks ${PERSONAL_EMAIL}`]);
   assert.equal(message.code, 1);
   assert.ok(has(message, 'email', { path: '(commit message)' }));
@@ -187,6 +206,10 @@ test('staged: a clean commit passes; personal data, identity and risky code are 
   const risky = repo.scan(['--staged']);
   assert.equal(risky.code, 0, 'risky code is a warning to review, not a blocker');
   assert.ok(has(risky, 'html-sink', { severity: 'warning', path: 'page.js', line: 2 }));
+  const strict = repo.scan(['--staged', '--strict']);
+  assert.equal(strict.code, 1, 'strict CI treats review warnings as failures');
+  assert.equal(strict.out.ok, false);
+  assert.equal(strict.out.strictFailures, 1);
 });
 
 test('the personal terms list itself can never be committed', { skip: !hasGit }, (t) => {

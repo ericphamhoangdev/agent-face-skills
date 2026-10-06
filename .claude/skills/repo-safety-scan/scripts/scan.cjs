@@ -8,12 +8,12 @@
 //       carry, its message, and risky patterns in newly added code
 //   node scan.cjs --tree
 //       every file git would commit from the working tree
-//   node scan.cjs --history [--all-refs]
+//   node scan.cjs --history [--all-refs | --range <base>..<head>]
 //       every commit on branches, tags and remotes (--all-refs: every ref,
-//       stash included): file contents, file names, authors, committers,
-//       taggers and messages
+//       stash included), or only the commits in a bounded range: file
+//       contents, file names, authors, committers, taggers and messages
 //
-// Other options: --json, --terms <file>, --repo <dir>.
+// Other options: --json, --strict, --terms <file>, --repo <dir>.
 // Exit code: 0 no blockers (there may be warnings), 1 blockers found,
 // 2 the scan could not run.
 
@@ -284,11 +284,8 @@ function scanContent(ctx, rel, buf, { names = true } = {}) {
 /** Findings for the name and email a commit carries. */
 function identityFindings(ctx, role, name, email) {
   const found = [];
-  const who = `${name} <${email}>`;
-  const at = who.lastIndexOf(email);
-  if (email && !SAFE_EMAIL.test(email) && !allowed(who, at, at + email.length, ctx.terms.allow)) {
-    found.push({ severity: 'blocker', kind: 'identity', rule: 'identity-email', what: `${role} email`, match: email });
-  }
+  // Contributor emails are deliberate Git metadata. Keep blocking email
+  // addresses in files and messages, but allow them in identity fields.
   for (const term of ctx.terms.terms) {
     for (const m of occurrences(name, term)) {
       if (!allowed(name, m.index, m.index + m.text.length, ctx.terms.allow)) {
@@ -351,7 +348,7 @@ function scanStaged(ctx) {
     const ident = git(ctx, ['var', `GIT_${role.toUpperCase()}_IDENT`], { allowFail: true });
     const m = ident && /^(.*) <([^>]*)> \d+ [+-]\d{4}$/.exec(ident.trim());
     if (m) findings.push(...identityFindings(ctx, role, m[1], m[2]));
-    else findings.push({ severity: 'warning', kind: 'identity', rule: 'no-identity', what: `no ${role} identity is configured, so it couldn't be checked`, match: '' });
+    else findings.push({ severity: 'warning', kind: 'identity', rule: 'no-identity', what: `no ${role} identity is configured, so its name couldn't be checked`, match: '' });
   }
 
   if (ctx.message !== null) {
@@ -405,7 +402,7 @@ function scanTree(ctx) {
 }
 
 function scanHistory(ctx) {
-  const refs = ctx.allRefs ? ['--all'] : ['--branches', '--tags', '--remotes'];
+  const refs = ctx.range ? [ctx.range] : ctx.allRefs ? ['--all'] : ['--branches', '--tags', '--remotes'];
   const findings = termsFileFindings(ctx);
   const notes = [];
   const listed = git(ctx, ['rev-list', '--objects', ...refs]);
@@ -468,12 +465,16 @@ function scanHistory(ctx) {
     for (const f of scanText(ctx, c.message)) group({ ...f, line: undefined, path: '(commit message)' }, { commit: c.sha });
   }
 
-  const tags = git(ctx, ['for-each-ref', 'refs/tags', '--format=%(objecttype)%1f%(refname:short)%1f%(taggername)%1f%(taggeremail)%1f%(contents)%1e']);
-  for (const record of tags.split('\x1e').map((r) => r.replace(/^\n/, '')).filter(Boolean)) {
-    const [type, tag, name, email, message] = record.split('\x1f');
-    if (type !== 'tag') continue; // lightweight tags carry nothing of their own
-    for (const f of identityFindings(ctx, 'tagger', name, email.replace(/^<|>$/g, ''))) group(f, { commit: `tag ${tag}` });
-    for (const f of scanText(ctx, message || '')) group({ ...f, line: undefined, path: `(tag ${tag} message)` }, { commit: `tag ${tag}` });
+  // A commit range cannot introduce a ref, so tags are relevant only to a
+  // whole-repository history scan.
+  if (!ctx.range) {
+    const tags = git(ctx, ['for-each-ref', 'refs/tags', '--format=%(objecttype)%1f%(refname:short)%1f%(taggername)%1f%(taggeremail)%1f%(contents)%1e']);
+    for (const record of tags.split('\x1e').map((r) => r.replace(/^\n/, '')).filter(Boolean)) {
+      const [type, tag, name, email, message] = record.split('\x1f');
+      if (type !== 'tag') continue; // lightweight tags carry nothing of their own
+      for (const f of identityFindings(ctx, 'tagger', name, email.replace(/^<|>$/g, ''))) group(f, { commit: `tag ${tag}` });
+      for (const f of scanText(ctx, message || '')) group({ ...f, line: undefined, path: `(tag ${tag} message)` }, { commit: `tag ${tag}` });
+    }
   }
 
   // The commits behind each finding, newest first. For a file version, that's
@@ -499,7 +500,8 @@ function scanHistory(ctx) {
   if (zones.size) {
     notes.push(`commit times carry the author's timezone offset (${[...zones].sort().join(', ')}), which hints at where they live`);
   }
-  if (!ctx.allRefs) notes.push('stash, notes and other refs were not scanned (add --all-refs); unreachable objects never are');
+  if (ctx.range) notes.push(`only commits in ${ctx.range} were scanned`);
+  else if (!ctx.allRefs) notes.push('stash, notes and other refs were not scanned (add --all-refs); unreachable objects never are');
   return { findings, notes, counts: { commits: commits.length, blobs: blobs.length } };
 }
 
@@ -523,12 +525,16 @@ function describe(f) {
   return `${f.kind.padEnd(9)} ${where ? `${where} — ` : ''}${f.what}${shown}${commits}`;
 }
 
-function report(scope, result, json) {
+function report(scope, result, json, strict) {
   const findings = result.findings.map(publicFinding);
   const blockers = findings.filter((f) => f.severity === 'blocker');
   const warnings = findings.filter((f) => f.severity === 'warning');
+  // A private personal-terms list intentionally isn't available to shared CI.
+  // Keep that setup notice visible without making strict CI impossible to run.
+  const strictWarnings = strict ? warnings.filter((f) => f.rule !== 'no-terms') : [];
+  const failed = blockers.length > 0 || strictWarnings.length > 0;
   if (json) {
-    console.log(JSON.stringify({ scope, ok: blockers.length === 0, blockers: blockers.length, warnings: warnings.length, scanned: result.counts, findings: [...blockers, ...warnings], notes: result.notes }, null, 2));
+    console.log(JSON.stringify({ scope, strict, ok: !failed, blockers: blockers.length, warnings: warnings.length, strictFailures: strictWarnings.length, scanned: result.counts, findings: [...blockers, ...warnings], notes: result.notes }, null, 2));
   } else {
     const scanned = Object.entries(result.counts).map(([k, v]) => `${v} ${k}`).join(', ');
     console.log(`repo-safety-scan --${scope}: ${scanned}`);
@@ -542,9 +548,9 @@ function report(scope, result, json) {
       for (const note of result.notes) console.log(`  ${note}`);
     }
     const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
-    console.log(`\n${blockers.length ? 'NOT SAFE' : 'OK'}: ${plural(blockers.length, 'blocker')}, ${plural(warnings.length, 'warning')}`);
+    console.log(`\n${failed ? 'NOT SAFE' : 'OK'}${strict ? ' (strict mode)' : ''}: ${plural(blockers.length, 'blocker')}, ${plural(warnings.length, 'warning')}`);
   }
-  return blockers.length ? 1 : 0;
+  return failed ? 1 : 0;
 }
 
 // ------------------------------------------------------------------ main
@@ -557,6 +563,8 @@ const HELP = `Usage: node scan.cjs --staged | --tree | --history [options]
   --tree                   every file git would commit from the working tree
   --history                every commit on branches, tags and remotes
     --all-refs             every ref instead (stash, notes, backups)
+    --range <base>..<head> only commits in this bounded commit-ID range
+  --strict                  fail on warnings too (except a missing private terms list)
   --terms <file>           personal terms list (default: personal-terms.local.json next to scripts/)
   --repo <dir>             repo to scan (default: the one around the current folder)
   --json                   machine-readable output
@@ -564,7 +572,7 @@ const HELP = `Usage: node scan.cjs --staged | --tree | --history [options]
 Exit code: 0 no blockers, 1 blockers found, 2 the scan could not run.`;
 
 function parseArgs(argv) {
-  const opts = { scope: null, message: null, json: false, allRefs: false, terms: null, repo: null };
+  const opts = { scope: null, message: null, json: false, strict: false, allRefs: false, range: null, terms: null, repo: null };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     const value = () => {
@@ -579,7 +587,9 @@ function parseArgs(argv) {
     else if (arg === '--terms') opts.terms = value();
     else if (arg === '--repo') opts.repo = value();
     else if (arg === '--json') opts.json = true;
+    else if (arg === '--strict') opts.strict = true;
     else if (arg === '--all-refs') opts.allRefs = true;
+    else if (arg === '--range') opts.range = value();
     else if (arg === '--help' || arg === '-h') opts.scope = 'help';
     else throw new ScanError(`unknown option ${arg}`);
   }
@@ -610,14 +620,20 @@ function main(argv) {
   const start = path.resolve(opts.repo || process.cwd());
   const top = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: start, encoding: 'utf8', windowsHide: true });
   if (top.status !== 0) throw new ScanError(`not inside a git repo: ${start}`);
+  if ((opts.allRefs || opts.range) && opts.scope !== 'history') throw new ScanError('--all-refs and --range are only valid with --history');
+  if (opts.allRefs && opts.range) throw new ScanError('pick one of --all-refs or --range');
+  if (opts.range && !/^[0-9a-f]{7,64}\.\.[0-9a-f]{7,64}$/i.test(opts.range)) {
+    throw new ScanError('--range must be <base>..<head> using commit IDs');
+  }
   const ctx = {
     repo: path.resolve(top.stdout.trim()),
     message: opts.message,
     allRefs: opts.allRefs,
+    range: opts.range,
     terms: loadTerms(path.resolve(opts.terms || DEFAULT_TERMS), Boolean(opts.terms)),
   };
   const scan = { staged: scanStaged, tree: scanTree, history: scanHistory }[opts.scope];
-  return report(opts.scope, scan(ctx), opts.json);
+  return report(opts.scope, scan(ctx), opts.json, opts.strict);
 }
 
 if (require.main === module) {

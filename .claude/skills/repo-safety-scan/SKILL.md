@@ -15,15 +15,18 @@ No secret, and nothing that identifies the user, may reach a commit in this repo
 node .claude/skills/repo-safety-scan/scripts/scan.cjs --staged --message "<commit message>"   # before a commit
 node .claude/skills/repo-safety-scan/scripts/scan.cjs --tree                                   # the working tree, as git would commit it
 node .claude/skills/repo-safety-scan/scripts/scan.cjs --history                                # every commit on branches, tags and remotes
+node .claude/skills/repo-safety-scan/scripts/scan.cjs --history --range <base>..<head>         # only commits introduced by a PR
 ```
 
-- `--staged` checks the staged files, the author and committer email the commit would carry, the message (`--message` or `--message-file`), and risky patterns in newly added code.
+- `--staged` checks the staged files, the author and committer names the commit would carry, the message (`--message` or `--message-file`), and risky patterns in newly added code. Contributor emails are allowed in Git identity fields, but email addresses in files and messages remain blockers.
 - `--history` checks every version of every file, every file and folder name, every author, committer and tagger, and every commit and tag message. `--all-refs` adds stash, notes and backup refs.
+- `--history --range <base>..<head>` applies the same commit, message, identity, file-name and historical-content checks only to commits introduced after `base`. Both ends must be commit IDs. CI combines this with `--tree` so both intermediate commits and the proposed final tree are covered.
+- `--strict` also fails on warnings, except the expected notice that a private personal-terms list is unavailable. CI uses strict mode so uncertain secrets, unscanned binaries and archives, local paths, public IPs, and risky code changes require removal or an explicit `safety-scan: allow` justification.
 - `--json` gives machine-readable output. Exit code 0 means no blockers, 1 means blockers, 2 means the scan couldn't run: say so, and never treat it as a pass.
 
 | Severity | What |
 | --- | --- |
-| Blocker | Credentials with a known shape: private keys; AWS, GitHub, Anthropic, OpenAI, Google, Slack, Stripe, npm, Hugging Face and GitLab keys and tokens; JWTs; passwords in URLs. Email addresses (except `example.com` and no-reply ones) in files, messages or commit identities. Home-folder paths. Anything on the personal terms list. Key, certificate, `.env` and credentials files. Media files outside the explicitly reviewed Spark example. |
+| Blocker | Credentials with a known shape: private keys; AWS, GitHub, Anthropic, OpenAI, Google, Slack, Stripe, npm, Hugging Face and GitLab keys and tokens; JWTs; passwords in URLs. Email addresses (except `example.com` and no-reply ones) in files or messages; contributor identity emails are allowed. Home-folder paths. Anything on the personal terms list. Key, certificate, `.env` and credentials files. Media files, which this repo never ships. |
 | Warning | Values given to secret-sounding names, long random-looking strings, other absolute local paths, public IP addresses, binary and archive files. In `--staged`, new code that weakens the security model: shell commands, `innerHTML`, `eval`, Electron isolation turned off, a weakened CSP, an open port, and so on. |
 
 Secrets are never printed in full.
@@ -64,7 +67,7 @@ Run `--history` and `--tree`. Every blocker in the history must be gone before t
 - A file that shouldn't be committed at all: `git restore --staged <file>`, then add it to `.gitignore`.
 - Media: only the reviewed files in `examples/spark/` are allowed. Generate what tests need in code, as `skills/agent-face/lib/starter.cjs` does.
 
-**The commit identity.** If the author or committer email is personal, every commit publishes it. Ask the user before changing anything. The usual fix is GitHub's no-reply address in this repo's config:
+**The commit identity.** Git necessarily publishes author and committer identity fields, so contributor emails are allowed there. A contributor who prefers not to publish a personal address can use GitHub's no-reply address in this repo's config:
 
 ```bash
 gh api users/<github-user> --jq .id      # the account's numeric id
