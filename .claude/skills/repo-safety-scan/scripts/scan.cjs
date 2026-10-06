@@ -79,11 +79,16 @@ const IPV4 = /(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d
 /** Loopback, private, link-local and documentation ranges. */
 const NON_PUBLIC_IP = /^(?:0\.|10\.|127\.|169\.254\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|192\.0\.2\.|198\.51\.100\.|203\.0\.113\.|255\.)/;
 
-/** Media and other binaries this repo never ships. */
+/** Media and other binaries blocked unless they are an explicitly reviewed project asset. */
 const MEDIA = new Set([
   '.png', '.apng', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico', '.bmp', '.avif', '.tiff', '.heic',
   '.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac', '.opus',
   '.mp4', '.webm', '.mov', '.mkv', '.avi',
+]);
+const APPROVED_MEDIA = new Set([
+  'examples/spark/idle.png',
+  'examples/spark/thinking.gif',
+  'examples/spark/happy.webp',
 ]);
 
 /** Files that hold secrets or personal data by their nature: [rule, what, pattern, severity]. */
@@ -251,8 +256,8 @@ function fileFindings(ctx, rel, { names = true } = {}) {
   for (const [rule, what, re, severity] of SENSITIVE_FILES) {
     if (re.test(rel)) found.push({ severity, kind: 'file', rule, what, match: rel });
   }
-  if (MEDIA.has(path.extname(rel).toLowerCase())) {
-    found.push({ severity: 'blocker', kind: 'file', rule: 'media', what: 'a media file (this repo ships none; they can also carry location or generator metadata)', match: rel });
+  if (MEDIA.has(path.extname(rel).toLowerCase()) && !APPROVED_MEDIA.has(rel)) {
+    found.push({ severity: 'blocker', kind: 'file', rule: 'media', what: 'an unapproved media file (media can carry personal or generator metadata)', match: rel });
   }
   if (names) {
     for (const f of scanLine(ctx, rel, { names: true })) found.push({ ...f, what: `${f.what} in a file name` });

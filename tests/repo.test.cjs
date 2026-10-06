@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 
 const { checkRepo, frontmatter } = require('../scripts/check-repo.cjs');
 
-test('the repo holds no media or personal data, and its skills are well-formed', () => {
+test('the repo holds only approved example media, no personal data, and well-formed skills', () => {
   assert.deepEqual(checkRepo(), []);
 });
 

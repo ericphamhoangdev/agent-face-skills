@@ -1,0 +1,10 @@
+{
+  "name": "Spark",
+  "description": "A friendly example face demonstrating PNG, GIF, and animated WebP states.",
+  "default_state": "idle",
+  "states": {
+    "idle": { "file": "idle.png" },
+    "thinking": { "file": "thinking.gif" },
+    "happy": { "file": "happy.webp" }
+  }
+}
