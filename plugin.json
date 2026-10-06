@@ -1,0 +1,35 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "agent-face",
+  "version": "0.2.2",
+  "description": "Give a coding agent a floating desktop face with visual states, custom templates, and voice clips.",
+  "author": {
+    "name": "ericphamhoangdev",
+    "url": "https://github.com/ericphamhoangdev"
+  },
+  "homepage": "https://github.com/ericphamhoangdev/agent-face-skills",
+  "repository": "https://github.com/ericphamhoangdev/agent-face-skills",
+  "license": "MIT",
+  "keywords": [
+    "agent",
+    "desktop",
+    "face",
+    "voice"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Agent Face",
+        "shortDescription": "A floating desktop face for coding agents.",
+        "longDescription": "Show a coding agent's current state in an always-on-top desktop window, customize its visual templates, and play voice clips with lip-sync.",
+        "developerName": "ericphamhoangdev",
+        "category": "Developer Tools",
+        "websiteURL": "https://github.com/ericphamhoangdev/agent-face-skills",
+        "defaultPrompt": [
+          "Set up a face for this coding agent.",
+          "Show the agent face and set it to the working state."
+        ]
+      }
+    }
+  }
+}

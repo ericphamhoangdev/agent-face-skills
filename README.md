@@ -23,6 +23,30 @@ your agent's repo                       your machine
 
 ## Install
 
+### Claude Code marketplace
+
+Add this repository as a marketplace, then install the plugin:
+
+```bash
+claude plugin marketplace add ericphamhoangdev/agent-face-skills
+claude plugin install agent-face@agent-face-skills
+```
+
+The plugin includes all three Agent Face skills.
+
+### Codex marketplace
+
+Add this repository as a marketplace, then install the same plugin in Codex:
+
+```bash
+codex plugin marketplace add ericphamhoangdev/agent-face-skills
+codex plugin add agent-face@agent-face-skills
+```
+
+The repository also includes the portable plugin manifest and Codex marketplace metadata used by the ChatGPT desktop app.
+
+### Skills CLI
+
 In the agent's project:
 
 ```bash

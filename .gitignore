@@ -9,9 +9,12 @@ Thumbs.db
 # agent's own repo — never in this one.
 /.agent-face/
 
-# Skills installed into this checkout while testing the installer, and
-# local Claude settings. The repo's own rules and safety-scan skill are kept.
-/.agents/
+# Skills installed into this checkout while testing the installer, and local
+# agent settings. The repo's marketplace metadata, rules and safety skill stay.
+/.agents/*
+!/.agents/plugins/
+/.agents/plugins/*
+!/.agents/plugins/marketplace.json
 /.claude/*
 !/.claude/rules/
 !/.claude/skills/

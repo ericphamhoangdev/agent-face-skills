@@ -96,6 +96,8 @@ function checkRepo() {
   const version = fs.readFileSync(path.join(ROOT, 'skills', 'agent-face', 'VERSION'), 'utf8').trim();
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
   if (pkg.version !== version) problems.push(`package.json version ${pkg.version} != skills/agent-face/VERSION ${version}`);
+  const plugin = JSON.parse(fs.readFileSync(path.join(ROOT, 'plugin.json'), 'utf8'));
+  if (plugin.version !== version) problems.push(`plugin.json version ${plugin.version} != skills/agent-face/VERSION ${version}`);
   const changelog = fs.readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf8');
   if (!new RegExp(`^## ${version.replace(/\./g, '\\.')}\\b`, 'm').test(changelog)) {
     problems.push(`CHANGELOG.md has no "## ${version}" entry`);
