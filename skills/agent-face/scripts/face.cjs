@@ -225,10 +225,23 @@ function setup() {
   if (!fs.existsSync(manifest)) {
     fs.writeFileSync(manifest, `${JSON.stringify({ name: 'agent-face-window-runtime', private: true }, null, 2)}\n`);
   }
-  // npm's own output goes to stderr so stdout stays one JSON document. A
-  // fixed command line through the shell: on Windows npm is a .cmd file.
-  const toStderr = { cwd: dir, stdio: ['ignore', 2, 2] };
-  const npm = spawnSync(`npm install electron@${ELECTRON_MAJOR} --no-audit --no-fund --loglevel=error`, { ...toStderr, shell: true });
+  // npm's own output goes to stderr so stdout stays one JSON document.
+  // Run npm's JavaScript entry point on Windows: npm.cmd needs a shell.
+  const toStderr = { cwd: dir, stdio: ['ignore', 2, 2], shell: false };
+  const npmArgs = ['install', `electron@${ELECTRON_MAJOR}`, '--no-audit', '--no-fund', '--loglevel=error'];
+  let npmCommand = 'npm';
+  if (process.platform === 'win32') {
+    const npmCli = [
+      process.env.npm_execpath,
+      path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    ].find((candidate) => candidate && path.basename(candidate) === 'npm-cli.js' && fs.existsSync(candidate));
+    if (!npmCli) {
+      throw new CliError('could not find the npm CLI', { hint: 'Install Node.js with npm, then retry face.cjs setup.' });
+    }
+    npmCommand = process.execPath;
+    npmArgs.unshift(npmCli);
+  }
+  const npm = spawnSync(npmCommand, npmArgs, toStderr);
   // The npm package is only a launcher; its own installer fetches the
   // binary (recent versions leave that until first use).
   const installer = path.join(electronPackage(), 'install.js');
